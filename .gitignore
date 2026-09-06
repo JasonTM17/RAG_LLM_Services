@@ -78,5 +78,7 @@ temp/
 .codex/tmp/
 .codex/cache/
 .codex/plugins/
+.mimosa/
+.video_agent/
 .agents/skills/
 .agents/plugins/
