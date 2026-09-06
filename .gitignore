@@ -1,0 +1,82 @@
+# Local runtime secrets
+.env
+.env.*
+!.env.example
+.secrets/
+/secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+
+# Project instruction files are intentional source even if a user-level global
+# ignore excludes AGENTS.md.
+!AGENTS.md
+!**/AGENTS.md
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+dist/
+build/
+*.egg-info/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+.turbo/
+.vercel/
+.pnpm-store/
+
+# Docker and local service state
+/.docker/
+/docker-data/
+/data/
+/storage/
+/volumes/
+/minio-data/
+/postgres-data/
+/redis-data/
+/prometheus-data/
+/grafana-data/
+/n8n-data/
+
+# Generated or private evaluation artifacts
+evals/reports/private/
+evals/reports/local/
+evals/tmp/
+*.prof
+*.trace
+
+# Logs and temporary files
+logs/
+*.log
+tmp/
+temp/
+.cache/
+
+# Agent/runtime local state, not project contracts
+.codex/skills/
+.claude/skills/
+.cursor/skills/
+.codex/memories/
+.codex/sessions/
+.codex/logs/
+.codex/tmp/
+.codex/cache/
+.codex/plugins/
+.agents/skills/
+.agents/plugins/
