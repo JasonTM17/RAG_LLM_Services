@@ -1,0 +1,30 @@
+[project]
+name = "rag-llm-services-api"
+version = "0.1.0"
+description = "FastAPI application for the RAG LLM Services platform."
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.116",
+    "uvicorn[standard]>=0.35",
+    "python-dotenv>=1.0",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.10",
+    "sqlalchemy[asyncio]>=2.0.43",
+    "psycopg[binary]>=3.3.5,<4",
+    "alembic>=1.16",
+    "redis>=5",
+    "httpx>=0.28",
+    "rag-llm-services-shared",
+    "rag-llm-services-observability",
+]
+
+[tool.uv.sources]
+rag-llm-services-shared = { workspace = true }
+rag-llm-services-observability = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_llm_services_api"]

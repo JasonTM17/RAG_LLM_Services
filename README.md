@@ -6,7 +6,7 @@ The target system lets a user upload learning documents, build owner-scoped know
 
 ## Current Status
 
-This repository is at Phase 01 foundation. It contains the repository contract, architecture docs, ADR skeletons, environment contract, and plan evidence. Backend, worker, frontend, compose services, and acceptance demo behavior are intentionally not implemented yet.
+This repository has completed Phase 01 (repository contract, architecture docs, ADRs, environment contract) and Phase 02 (backend foundation). The FastAPI app now boots locally with typed settings, structured redacting JSON logs, request IDs, the standard error envelope, async SQLAlchemy with an Alembic baseline, and health endpoints. Worker, frontend, compose services, and acceptance demo behavior are intentionally not implemented yet.
 
 ## Architecture
 
@@ -29,23 +29,24 @@ More detail:
 
 ## Runtime Defaults
 
-- Python: `3.13` through `uv`.
+- Python: `3.13` through `uv` (uv workspace members: `apps/api`, `packages/shared`, `packages/observability`).
 - Node: `24.12.0` with `pnpm`.
 - DeepSeek OpenAI-compatible base URL: `https://api.deepseek.com`.
 - Primary model alias: `deepseek-v4-flash`.
 - Default LLM API mode: `responses`.
 - Live DeepSeek tests: opt-in only through `RUN_DEEPSEEK_LIVE_TESTS=true`.
 
-Local secrets live in `.env` and must not be committed. `.env.example` documents the placeholder-only configuration surface.
+Local secrets live in `.env` and must not be committed. The application reads configuration from **environment variables only** — `.env` files are loaded by the runtime, not parsed in-process: `make api-run` passes `--env-file .env` to uvicorn, and compose services use `env_file`. `.env.example` documents the placeholder-only configuration surface.
 
 AgentKit skill mirrors under `.codex/skills/`, `.claude/skills/`, `.cursor/skills/`, and `.agents/skills/` are local generated assets. They are intentionally ignored in Git; regenerate them with the project AgentKit installer/runtime if a fresh clone lacks local skills.
 
 ## Command Contract
 
-Phase 01 provides only repository and documentation checks:
+Phase 01 and Phase 02 checks:
 
 ```powershell
 .\scripts\verify-phase-01.ps1
+.\scripts\verify-phase-02.ps1
 ```
 
 The Makefile mirrors the same contract for environments with `make`:
@@ -54,9 +55,14 @@ The Makefile mirrors the same contract for environments with `make`:
 make help
 make plan-status
 make verify-phase-01
+make verify-phase-02
+make api-test      # uv run pytest -q
+make api-lint      # ruff check + format check
+make api-migrate   # alembic upgrade head (needs a configured Postgres)
+make api-run       # uvicorn with reload on :8000
 ```
 
-Future phases will add runnable service, test, compose, backup, restore, and acceptance-demo targets.
+Health endpoints once the API is running: `GET /health/live` (process-only) and `GET /health/ready` (bounded Postgres/Redis/MinIO probes). Future phases will add runnable worker, web, compose, backup, restore, and acceptance-demo targets.
 
 ## Plan Authority
 

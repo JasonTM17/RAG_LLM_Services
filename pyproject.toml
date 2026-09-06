@@ -1,0 +1,42 @@
+[project]
+name = "rag-llm-services"
+version = "0.1.0"
+description = "RAG LLM Services production platform: uv workspace root."
+requires-python = ">=3.13"
+# Deviation note: members are declared as root dependencies so that plain
+# `uv sync` / `uv run` install the whole workspace; with an empty dependency
+# list uv strips members on every plain sync and the verify commands break.
+dependencies = [
+    "rag-llm-services-api",
+    "rag-llm-services-shared",
+    "rag-llm-services-observability",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=1", "ruff>=0.13", "mypy>=1.18"]
+
+[tool.uv.workspace]
+members = ["apps/api", "packages/shared", "packages/observability"]
+
+[tool.uv.sources]
+rag-llm-services-api = { workspace = true }
+rag-llm-services-shared = { workspace = true }
+rag-llm-services-observability = { workspace = true }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["apps/api/src", "packages/shared/src", "packages/observability/src", "tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# Depends() in route defaults is the FastAPI dependency-injection idiom.
+"apps/api/src/rag_llm_services_api/api/**" = ["B008"]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
