@@ -14,13 +14,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from rag_llm_services_api.api.health import router as health_router
 from rag_llm_services_api.api.v1.router import router as api_v1_router
-from rag_llm_services_api.core.config import Settings, get_settings
+from rag_llm_services_api.core.config import PLACEHOLDER_MARKERS, Settings, get_settings
 from rag_llm_services_api.core.error_handlers import register_exception_handlers
 from rag_llm_services_api.core.middleware import RequestIdMiddleware
 from rag_llm_services_api.db.session import dispose_engine
 from rag_llm_services_observability.logging_setup import configure_logging
-
-PLACEHOLDER_MARKERS = ("replace-with", "changeme", "your-", "example")
 
 
 def _collect_known_secrets(settings: Settings) -> tuple[str, ...]:

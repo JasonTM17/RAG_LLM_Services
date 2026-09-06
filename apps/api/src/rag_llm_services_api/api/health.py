@@ -35,6 +35,11 @@ class DependencyCheck(Protocol):
 
     ``check`` returns normally on success and raises on failure; all
     presentation (status mapping, logging) is owned by the readiness route.
+
+    Implementations must be await-cooperative: ``asyncio.wait_for`` can only
+    preempt a check at ``await`` points, so a synchronous blocking call inside
+    ``check`` would defeat the shared timeout. Wrap blocking SDKs in
+    ``asyncio.to_thread`` if they cannot be awaited.
     """
 
     name: str
@@ -76,7 +81,7 @@ class MinioCheck:
     """Verify the MinIO liveness endpoint answers with a success status."""
 
     def __init__(self, endpoint: str, name: str = "minio") -> None:
-        self.endpoint = endpoint
+        self.endpoint = endpoint.rstrip("/")
         self.name = name
 
     async def check(self) -> None:

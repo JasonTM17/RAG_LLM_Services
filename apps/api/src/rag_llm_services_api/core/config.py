@@ -117,6 +117,15 @@ class AppSettings(BaseSettings):
             return [part.strip() for part in value.split(",") if part.strip()]
         return value
 
+    @field_validator("cors_origins")
+    @classmethod
+    def _reject_wildcard_with_credentials(cls, value: list[str]) -> list[str]:
+        # CORSMiddleware runs with allow_credentials=True, so a wildcard
+        # origin would send credentials to any site.
+        if "*" in value:
+            raise ValueError("CORS_ORIGINS must not contain '*' (credentials are enabled)")
+        return value
+
 
 class DevAuthSettings(BaseSettings):
     """Local-only principal resolution; production must fail closed."""
@@ -256,9 +265,15 @@ class FrontendSettings(BaseSettings):
 
 
 class Settings(BaseSettings):
-    """Root settings object aggregating every configuration domain."""
+    """Root settings object aggregating every configuration domain.
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    Environment variables are the single in-process configuration source:
+    ``.env`` files are loaded by the runtime instead (``uvicorn --env-file``,
+    ``docker compose env_file``), which keeps the process hermetic in tests
+    and avoids dotenv sources that cannot cascade into nested models.
+    """
+
+    model_config = SettingsConfigDict(extra="ignore")
 
     app: AppSettings = Field(default_factory=AppSettings)
     dev_auth: DevAuthSettings = Field(default_factory=DevAuthSettings)
@@ -289,6 +304,10 @@ class Settings(BaseSettings):
             "N8N_ENCRYPTION_KEY": self.n8n.encryption_key,
             "GRAFANA_ADMIN_PASSWORD": self.observability.grafana_admin_password,
         }
+        # Invariant: the guard must cover exactly the documented required set.
+        assert set(values) == set(PRODUCTION_REQUIRED_SECRET_VARS), (
+            "production guard drift: guard keys do not match PRODUCTION_REQUIRED_SECRET_VARS"
+        )
         for var_name, value in values.items():
             if not value or any(marker in value.lower() for marker in PLACEHOLDER_MARKERS):
                 offending.append(var_name)

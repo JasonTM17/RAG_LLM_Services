@@ -36,7 +36,7 @@ More detail:
 - Default LLM API mode: `responses`.
 - Live DeepSeek tests: opt-in only through `RUN_DEEPSEEK_LIVE_TESTS=true`.
 
-Local secrets live in `.env` and must not be committed. `.env.example` documents the placeholder-only configuration surface.
+Local secrets live in `.env` and must not be committed. The application reads configuration from **environment variables only** — `.env` files are loaded by the runtime, not parsed in-process: `make api-run` passes `--env-file .env` to uvicorn, and compose services use `env_file`. `.env.example` documents the placeholder-only configuration surface.
 
 AgentKit skill mirrors under `.codex/skills/`, `.claude/skills/`, `.cursor/skills/`, and `.agents/skills/` are local generated assets. They are intentionally ignored in Git; regenerate them with the project AgentKit installer/runtime if a fresh clone lacks local skills.
 

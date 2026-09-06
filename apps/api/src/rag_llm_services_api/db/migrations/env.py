@@ -24,9 +24,10 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Inject the database URL from application settings; the ini file carries no
-# credentials.
+# credentials. ConfigParser interpolation treats "%" specially, so percent
+# signs (e.g. from percent-encoded URL credentials) must be doubled.
 url = get_settings().database.url
-config.set_main_option("sqlalchemy.url", url)
+config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
 
 # Model metadata used by autogenerate; domain models register here in Phase 03.
 target_metadata = Base.metadata

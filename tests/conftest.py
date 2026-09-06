@@ -1,8 +1,10 @@
 """Shared test fixtures for the RAG LLM Services test suite.
 
-Tests must never read the developer's real ``.env``: settings objects are
-always constructed with ``_env_file=None`` and environment input arrives only
-through ``monkeypatch.setenv``.
+Settings read environment variables only (never ``.env`` in-process), and the
+autouse fixture below scrubs every app-relevant environment variable, so the
+developer's local environment and `.env` cannot influence test outcomes.
+Settings objects additionally use ``_env_file=None`` where constructed
+directly, keeping that guardrail explicit even if dotenv support returns.
 """
 
 import os

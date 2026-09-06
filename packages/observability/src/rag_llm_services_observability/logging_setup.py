@@ -1,12 +1,17 @@
 """Structured JSON logging with layered secret redaction.
 
-Three redaction layers, each negative-tested:
+Redaction layers, each negative-tested:
 
-1. Key denylist on ``extra`` values (case-insensitive).
+1. Recursive key denylist over ``extra`` (case-insensitive): a denied key at
+   ANY nesting level has its value replaced wholesale; dict, list, tuple, set,
+   and frozenset values are traversed.
 2. Value-pattern scrub of secret-looking strings (``sk-...``, ``ghp_...``,
-   ``Bearer ...``) in message text and string extra values.
+   ``Bearer ...``) at every nesting level, in message text, and again on the
+   fully serialized output (so ``repr()``/``str()`` fallbacks of arbitrary
+   objects cannot smuggle patterns through).
 3. Final serialized-output pass replacing any configured ``known_secrets``
-   literal, plus masking of DB-URL credentials.
+   literal (raw and JSON-escaped forms), plus masking of DB-URL credentials
+   including password-only URLs.
 
 ``configure_logging`` is idempotent: calling it again re-arms a single root
 handler instead of stacking duplicates.
@@ -18,6 +23,7 @@ import json
 import logging
 import re
 import sys
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -25,7 +31,8 @@ from rag_llm_services_observability.context import get_request_id
 
 REDACTED = "[REDACTED]"
 
-# Layer 1: key denylist matched case-insensitively against extra keys.
+# Layer 1: key denylist matched case-insensitively against extra keys at any
+# nesting level.
 _SENSITIVE_KEY_PATTERN = re.compile(
     r"api[-_]?key|authorization|password|secret|token|credential|cookie",
     re.IGNORECASE,
@@ -37,8 +44,9 @@ _SECRET_VALUE_PATTERN = re.compile(
     r"|Bearer\s+(sk|gh[po]_)[A-Za-z0-9._\-]{20,}"
 )
 
-# Layer 3: DB-URL credentials, e.g. postgresql://user:password@host/db.
-_DB_URL_CREDENTIAL_PATTERN = re.compile(r"://[^:/@\s]+:[^@/\s]+@")
+# Layer 3: DB-URL credentials, e.g. postgresql://user:password@host/db or the
+# password-only form redis://:password@host:6379 (empty user is allowed).
+_DB_URL_CREDENTIAL_PATTERN = re.compile(r"://[^/@\s]*:[^@/\s]+@")
 
 # Standard LogRecord attributes, excluded explicitly when merging ``extra``
 # into the JSON payload so only genuine caller extras reach the top level.
@@ -72,21 +80,34 @@ _STANDARD_LOGRECORD_ATTRS = frozenset(
 )
 
 
-def redact_extra(data: dict[str, Any]) -> dict[str, Any]:
-    """Redact a logging ``extra`` mapping (layers 1 and 2).
-
-    Denylisted keys have their value replaced wholesale; other string values
-    get secret-looking substrings scrubbed.
-    """
+def _redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
     redacted: dict[str, Any] = {}
     for key, value in data.items():
         if _SENSITIVE_KEY_PATTERN.search(str(key)):
             redacted[key] = REDACTED
-        elif isinstance(value, str):
-            redacted[key] = _SECRET_VALUE_PATTERN.sub(REDACTED, value)
         else:
-            redacted[key] = value
+            redacted[key] = _redact_value(value)
     return redacted
+
+
+def _redact_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _SECRET_VALUE_PATTERN.sub(REDACTED, value)
+    if isinstance(value, Mapping):
+        return _redact_mapping(value)
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_redact_value(item) for item in value]
+    return value
+
+
+def redact_extra(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Redact a logging ``extra`` mapping (layers 1 and 2).
+
+    Denylisted keys at ANY nesting level have their value replaced wholesale;
+    container values are traversed recursively; string values get
+    secret-looking substrings scrubbed.
+    """
+    return _redact_mapping(data)
 
 
 def redact_text(text: str) -> str:
@@ -142,6 +163,15 @@ class JsonFormatter(logging.Formatter):
         }
         payload.update(redact_extra(extra))
 
+        # Server-side traceback: serialized into the log record (never into
+        # client responses) and scrubbed like any other free text.
+        if record.exc_info:
+            exc_type = record.exc_info[0]
+            payload["exception"] = {
+                "type": exc_type.__name__ if exc_type is not None else "Exception",
+                "traceback": redact_text(self.formatException(record.exc_info)),
+            }
+
         # json.dumps must never raise: non-serializable values fall back to repr.
         serialized = json.dumps(payload, default=self._json_default)
         return self._final_pass(serialized)
@@ -158,12 +188,20 @@ class JsonFormatter(logging.Formatter):
             return f"<unrepr-able {type(value).__name__}>"
 
     def _final_pass(self, serialized: str) -> str:
-        """Layer 3: mask DB credentials and configured secrets in the output."""
+        """Layer 3: scrub the fully serialized output.
+
+        Runs after ``repr()``/``str()`` fallbacks and JSON escaping, so it is
+        the backstop for secrets embedded in arbitrary objects (layer 2 runs
+        before those conversions) and for configured literals containing
+        characters JSON escapes (quotes, backslashes).
+        """
         masked = _DB_URL_CREDENTIAL_PATTERN.sub("://[REDACTED]@", serialized)
         for secret in self.known_secrets:
-            if secret in masked:
-                masked = masked.replace(secret, REDACTED)
-        return masked
+            masked = masked.replace(secret, REDACTED)
+            escaped = json.dumps(secret)[1:-1]
+            if escaped != secret:
+                masked = masked.replace(escaped, REDACTED)
+        return _SECRET_VALUE_PATTERN.sub(REDACTED, masked)
 
 
 def configure_logging(

@@ -47,7 +47,7 @@ api-migrate:
 	@uv run alembic -c apps/api/alembic.ini upgrade head
 
 api-run:
-	@uv run uvicorn rag_llm_services_api.main:app --reload --port 8000
+	@uv run uvicorn rag_llm_services_api.main:app --reload --env-file .env --port 8000
 
 acceptance-demo:
 	@Write-Error "acceptance-demo is introduced after the API, worker, RAG, and observability phases are implemented."; exit 1

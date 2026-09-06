@@ -122,3 +122,41 @@ def test_cors_origins_parses_comma_separated(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("CORS_ORIGINS", "http://a.com, http://b.com")
     settings = Settings(_env_file=None)
     assert settings.app.cors_origins == ["http://a.com", "http://b.com"]
+
+
+def test_cors_origins_reject_wildcard(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Credentials are enabled, so a wildcard origin must fail validation.
+    monkeypatch.setenv("CORS_ORIGINS", "*")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_production_guard_covers_every_required_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Behavioral pin against guard drift: each documented required variable,
+    # missing one at a time, must be named by the production guard.
+    from rag_llm_services_api.core.config import PRODUCTION_REQUIRED_SECRET_VARS
+
+    real = "real-value-not-a-placeholder"
+    complete = {
+        "DATABASE_URL": f"postgresql+psycopg://u:{real}@db:5432/d",
+        "DEEPSEEK_API_KEY": real,
+        "POSTGRES_PASSWORD": real,
+        "MINIO_SECRET_KEY": real,
+        "N8N_API_KEY": real,
+        "N8N_ENCRYPTION_KEY": real,
+        "GRAFANA_ADMIN_PASSWORD": real,
+    }
+    assert set(complete) == set(PRODUCTION_REQUIRED_SECRET_VARS)
+    for missing in PRODUCTION_REQUIRED_SECRET_VARS:
+        # Remove the probe variable: earlier iterations may have set it.
+        monkeypatch.delenv(missing, raising=False)
+        for key, value in complete.items():
+            if key == missing:
+                continue
+            monkeypatch.setenv(key, value)
+        monkeypatch.setenv("APP_ENV", "production")
+        with pytest.raises(ConfigurationError) as excinfo:
+            Settings(_env_file=None)
+        assert missing in str(excinfo.value)

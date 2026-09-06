@@ -180,3 +180,52 @@ def test_real_logger_emits_redacted_json_with_request_id(
     assert payload["timestamp"].endswith("Z")
     assert payload["api_key"] == REDACTED
     assert "leak-me" not in stderr_lines[-1]
+
+
+def test_nested_denied_keys_are_redacted_at_any_depth() -> None:
+    # A secret nested under an innocent outer key must not leak (Wukong C1).
+    nested_secret = "ghp_" + "b" * 32
+    payload = _format(
+        _record(
+            "request context",
+            session={"headers": {"Authorization": "Bearer " + "c" * 30}},
+            api_payload={"api_key": nested_secret},
+            tags=["safe", {"password": "inner-" + "pw"}],
+        )
+    )
+    serialized = json.dumps(payload)
+    assert payload["session"]["headers"]["Authorization"] == REDACTED
+    assert payload["api_payload"]["api_key"] == REDACTED
+    assert payload["tags"][1]["password"] == REDACTED
+    assert "c" * 30 not in serialized
+    assert nested_secret not in serialized
+
+
+def test_secret_inside_non_string_object_repr_is_scrubbed() -> None:
+    # repr() of arbitrary objects runs AFTER layer 2; the serialized-output
+    # pass must still catch pattern families.
+    class WeirdObject:
+        def __repr__(self) -> str:
+            return "WeirdObject(token=sk-" + "z" * 24 + ")"
+
+    payload = _format(_record("weird extra", obj=WeirdObject()))
+    assert "sk-" + "z" * 24 not in json.dumps(payload)
+    assert REDACTED in str(payload["obj"])
+
+
+def test_password_only_db_url_is_masked() -> None:
+    payload = _format(_record("cache", dsn="redis://:Only" + "Pass123@cache:6379/0"))
+    assert "://" + REDACTED + "@" in str(payload["dsn"])
+    assert "OnlyPass123" not in json.dumps(payload)
+
+
+def test_known_secret_containing_json_escaped_chars_is_replaced() -> None:
+    # A literal containing a quote is serialized as pa\"ssword; both raw and
+    # escaped forms must be replaced.
+    tricky_secret = 'pa"ss' + "word"
+    record = _record("auth", provider="using " + tricky_secret + " inside")
+    formatted = JsonFormatter(service="svc", env="test", known_secrets=(tricky_secret,)).format(
+        record
+    )
+    assert tricky_secret not in formatted
+    assert REDACTED in formatted
