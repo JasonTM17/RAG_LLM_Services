@@ -1,0 +1,13 @@
+[project]
+name = "rag-llm-services-shared"
+version = "0.1.0"
+description = "Shared contracts for RAG LLM Services: error hierarchy, wire envelopes, constants."
+requires-python = ">=3.13"
+dependencies = ["pydantic>=2.9"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_llm_services_shared"]
