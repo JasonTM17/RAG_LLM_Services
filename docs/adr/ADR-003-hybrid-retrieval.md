@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted (2026-09-06): implementation begins with Phase 02; rationale recorded in docs/adr/ADR-007-toolchain.md context.
 
 ## Context
 
