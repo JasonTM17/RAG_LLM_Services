@@ -14,6 +14,7 @@ dependencies = [
     "rag-llm-services-embeddings",
     "rag-llm-services-llm",
     "rag-llm-services-agents",
+    "rag-llm-services-worker",
 ]
 
 [dependency-groups]
@@ -29,6 +30,7 @@ members = [
     "packages/embeddings",
     "packages/llm",
     "packages/agents",
+    "apps/worker",
 ]
 
 [tool.uv.sources]
@@ -39,6 +41,7 @@ rag-llm-services-rag = { workspace = true }
 rag-llm-services-embeddings = { workspace = true }
 rag-llm-services-llm = { workspace = true }
 rag-llm-services-agents = { workspace = true }
+rag-llm-services-worker = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -56,6 +59,7 @@ src = [
     "packages/embeddings/src",
     "packages/llm/src",
     "packages/agents/src",
+    "apps/worker/src",
     "tests",
 ]
 

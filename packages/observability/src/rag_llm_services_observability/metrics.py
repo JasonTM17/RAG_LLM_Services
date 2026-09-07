@@ -25,6 +25,7 @@ RETRIEVAL_STAGES = frozenset(
     }
 )
 RETRIEVAL_METHODS = frozenset({"vector", "keyword", "hybrid"})
+WORKER_JOB_STATUSES = frozenset({"indexed", "failed", "skipped", "retrying"})
 
 
 @dataclass(frozen=True)
@@ -141,6 +142,47 @@ class Histogram:
         return tuple((label, str(labels[label])) for label in self._label_names)
 
 
+class Gauge:
+    """Thread-safe gauge with allowlisted labels."""
+
+    def __init__(
+        self,
+        name: str,
+        label_names: tuple[str, ...],
+        allowed_label_values: Mapping[str, frozenset[str]],
+    ) -> None:
+        self.name = name
+        self._label_names = label_names
+        self._allowed_label_values = dict(allowed_label_values)
+        self._values: dict[tuple[tuple[str, str], ...], float] = {}
+        self._lock = Lock()
+
+    def set(self, labels: Mapping[str, str], value: float) -> None:
+        """Set a gauge value."""
+        key = self._label_key(labels)
+        with self._lock:
+            self._values[key] = value
+
+    def snapshot(self) -> dict[tuple[tuple[str, str], ...], float]:
+        """Return a point-in-time copy of all gauge samples."""
+        with self._lock:
+            return dict(self._values)
+
+    def reset(self) -> None:
+        """Clear samples for deterministic tests."""
+        with self._lock:
+            self._values.clear()
+
+    def _label_key(self, labels: Mapping[str, str]) -> tuple[tuple[str, str], ...]:
+        if set(labels) != set(self._label_names):
+            raise ValueError(f"{self.name} requires labels {self._label_names}")
+        for label, value in labels.items():
+            allowed_values = self._allowed_label_values.get(label)
+            if allowed_values is not None and value not in allowed_values:
+                raise ValueError(f"{self.name} label {label} value is not allowlisted")
+        return tuple((label, str(labels[label])) for label in self._label_names)
+
+
 RETRIEVAL_QUERY_TOTAL = Counter(
     name="rag_retrieval_query_total",
     label_names=("method",),
@@ -151,6 +193,24 @@ RETRIEVAL_STAGE_LATENCY_MS = Histogram(
     name="rag_retrieval_stage_latency_ms",
     label_names=("stage",),
     allowed_label_values={"stage": RETRIEVAL_STAGES},
+)
+
+WORKER_INGESTION_JOB_TOTAL = Counter(
+    name="rag_worker_ingestion_job_total",
+    label_names=("status",),
+    allowed_label_values={"status": WORKER_JOB_STATUSES},
+)
+
+WORKER_INGESTION_JOB_DURATION_MS = Histogram(
+    name="rag_worker_ingestion_job_duration_ms",
+    label_names=("status",),
+    allowed_label_values={"status": WORKER_JOB_STATUSES},
+)
+
+WORKER_QUEUE_DEPTH = Gauge(
+    name="rag_worker_queue_depth",
+    label_names=(),
+    allowed_label_values={},
 )
 
 
@@ -168,3 +228,25 @@ def reset_retrieval_metrics() -> None:
     """Reset retrieval metrics for deterministic tests."""
     RETRIEVAL_QUERY_TOTAL.reset()
     RETRIEVAL_STAGE_LATENCY_MS.reset()
+
+
+def record_worker_ingestion_job(status: str) -> None:
+    """Increment a worker ingestion job counter for a bounded status label."""
+    WORKER_INGESTION_JOB_TOTAL.inc({"status": status})
+
+
+def record_worker_ingestion_duration(status: str, duration_ms: float) -> None:
+    """Observe worker ingestion duration with a bounded status label."""
+    WORKER_INGESTION_JOB_DURATION_MS.observe({"status": status}, max(0.0, duration_ms))
+
+
+def record_worker_queue_depth(depth: int) -> None:
+    """Set the current approximate ingestion queue depth."""
+    WORKER_QUEUE_DEPTH.set({}, float(max(0, depth)))
+
+
+def reset_worker_metrics() -> None:
+    """Reset worker metrics for deterministic tests."""
+    WORKER_INGESTION_JOB_TOTAL.reset()
+    WORKER_INGESTION_JOB_DURATION_MS.reset()
+    WORKER_QUEUE_DEPTH.reset()

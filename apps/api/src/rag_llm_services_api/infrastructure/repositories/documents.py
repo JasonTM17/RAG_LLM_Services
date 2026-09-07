@@ -92,6 +92,22 @@ class DocumentRepository:
         await self._session.refresh(job)
         return document, version, job
 
+    async def mark_ingestion_job_queued(
+        self,
+        *,
+        owner_id: UUID,
+        job_id: UUID,
+        queued_task_id: str,
+    ) -> IngestionJobModel | None:
+        """Record the queue task ID after a job is successfully published."""
+        job = await self.get_ingestion_job(owner_id, job_id)
+        if job is None:
+            return None
+        job.queued_task_id = queued_task_id
+        await self._session.flush()
+        await self._session.refresh(job)
+        return job
+
     async def get_document_by_id(
         self,
         owner_id: UUID,
@@ -204,6 +220,24 @@ class DocumentRepository:
             return None
         job.status = status
         job.error_message = error_message
+        await self._session.flush()
+        await self._session.refresh(job)
+        return job
+
+    async def record_ingestion_job_attempt(
+        self,
+        *,
+        owner_id: UUID,
+        job_id: UUID,
+        task_id: str | None = None,
+    ) -> IngestionJobModel | None:
+        """Increment the durable worker attempt counter for a job."""
+        job = await self.get_ingestion_job(owner_id, job_id)
+        if job is None:
+            return None
+        job.attempt_count += 1
+        if task_id is not None:
+            job.queued_task_id = task_id
         await self._session.flush()
         await self._session.refresh(job)
         return job

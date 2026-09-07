@@ -10,6 +10,7 @@ from uuid import UUID
 import httpx
 import pytest
 from fastapi import FastAPI
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Ensure models are registered on Base.metadata
@@ -17,7 +18,15 @@ import rag_llm_services_api.db.models  # noqa: F401
 from rag_llm_services_api.core.config import Settings, get_settings
 from rag_llm_services_api.core.errors import NotFoundError
 from rag_llm_services_api.db.base import Base
+from rag_llm_services_api.db.models.document import DocumentModel
+from rag_llm_services_api.db.models.ingestion_job import IngestionJobModel
 from rag_llm_services_api.db.session import get_session
+from rag_llm_services_api.infrastructure.queue import get_task_queue
+from rag_llm_services_api.infrastructure.queue.base import (
+    IngestionTaskPayload,
+    MemoryTaskQueue,
+    QueueEnqueueResult,
+)
 from rag_llm_services_api.infrastructure.storage.base import ObjectStoragePort
 from rag_llm_services_api.infrastructure.storage.minio import get_object_storage
 from rag_llm_services_api.main import create_app
@@ -63,6 +72,21 @@ class InMemoryObjectStorage(ObjectStoragePort):
         pass
 
 
+class FailingTaskQueue:
+    """Queue test double that always fails publishing."""
+
+    async def enqueue_ingestion_job(
+        self,
+        payload: IngestionTaskPayload,
+    ) -> QueueEnqueueResult:
+        del payload
+        raise RuntimeError("queue unavailable")
+
+    async def queue_depth(self, queue_name: str) -> int:
+        del queue_name
+        raise RuntimeError("queue unavailable")
+
+
 @pytest.fixture
 async def test_env() -> AsyncIterator[
     tuple[FastAPI, httpx.AsyncClient, InMemoryObjectStorage, UUID, UUID]
@@ -82,10 +106,13 @@ async def test_env() -> AsyncIterator[
             yield session
 
     fake_storage = InMemoryObjectStorage()
+    fake_queue = MemoryTaskQueue()
 
     app = create_app()
+    app.state.task_queue = fake_queue
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_object_storage] = lambda: fake_storage
+    app.dependency_overrides[get_task_queue] = lambda: fake_queue
 
     # Configure dev auth settings so default requests resolve to owner_a
     def override_settings() -> Settings:
@@ -194,7 +221,8 @@ async def test_knowledge_base_owner_isolation(test_env) -> None:
 
 
 async def test_document_upload_lifecycle(test_env) -> None:
-    _, client, storage, _, _ = test_env
+    app, client, storage, _, _ = test_env
+    queue = app.state.task_queue
 
     # 1. Create KB
     kb_resp = await client.post(
@@ -217,12 +245,18 @@ async def test_document_upload_lifecycle(test_env) -> None:
     assert upload_data["file_size_bytes"] == len(pdf_content)
     assert "document_id" in upload_data
     assert "ingestion_job_id" in upload_data
+    assert upload_data["queued"] is True
+    assert upload_data["queue_task_id"] is not None
 
     doc_id = upload_data["document_id"]
     job_id = upload_data["ingestion_job_id"]
 
     # Verify storage contains the object
     assert len(storage.objects) == 1
+    assert len(queue.enqueued) == 1
+    assert str(queue.enqueued[0].job_id) == job_id
+    assert str(queue.enqueued[0].document_id) == doc_id
+    assert str(queue.enqueued[0].version_id) == upload_data["version_id"]
 
     # 3. Duplicate upload to same KB must be rejected with 409 DUPLICATE_DOCUMENT
     dup_resp = await client.post(
@@ -233,6 +267,7 @@ async def test_document_upload_lifecycle(test_env) -> None:
     assert dup_resp.status_code == 409
     body = dup_resp.json()
     assert body["error"]["code"] == "DUPLICATE_DOCUMENT"
+    assert len(queue.enqueued) == 1
 
     # 4. Detail endpoint
     detail_resp = await client.get(f"/api/v1/documents/{doc_id}")
@@ -256,6 +291,12 @@ async def test_document_upload_lifecycle(test_env) -> None:
     assert job_data["id"] == job_id
     assert job_data["status"] == "PENDING"
     assert job_data["document_id"] == doc_id
+    assert job_data["attempt_count"] == 0
+    assert job_data["queued_task_id"] == upload_data["queue_task_id"]
+
+    queue_resp = await client.get("/api/v1/ingestion-jobs/queue")
+    assert queue_resp.status_code == 200
+    assert queue_resp.json() == {"queue_name": "ingestion", "depth": 1}
 
     # 7. Reindex endpoint
     reindex_resp = await client.post(f"/api/v1/documents/{doc_id}/reindex")
@@ -263,6 +304,8 @@ async def test_document_upload_lifecycle(test_env) -> None:
     new_job = reindex_resp.json()
     assert new_job["id"] != job_id
     assert new_job["status"] == "PENDING"
+    assert new_job["queued_task_id"] == queue.enqueued[-1].task_id
+    assert len(queue.enqueued) == 2
 
     # 8. Delete document
     del_resp = await client.delete(f"/api/v1/documents/{doc_id}")
@@ -543,3 +586,32 @@ async def test_upload_cleans_up_storage_on_db_error(test_env) -> None:
 
     # Verify no orphaned object is left in storage
     assert len(storage.objects) == 0
+
+
+async def test_upload_marks_failed_when_queue_publish_fails(test_env) -> None:
+    app, client, storage, _, _ = test_env
+    app.dependency_overrides[get_task_queue] = lambda: FailingTaskQueue()
+
+    kb = (await client.post("/api/v1/knowledge-bases", json={"name": "Queue Failure KB"})).json()
+    response = await client.post(
+        "/api/v1/documents",
+        data={"knowledge_base_id": kb["id"]},
+        files={"file": ("queued.txt", b"queued content", "text/plain")},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "UPSTREAM_UNAVAILABLE"
+    assert len(storage.objects) == 1
+
+    override_session_maker = app.dependency_overrides[get_session]
+    async for session in override_session_maker():
+        docs = (await session.execute(select(DocumentModel))).scalars().all()
+        jobs = (await session.execute(select(IngestionJobModel))).scalars().all()
+        break
+
+    assert len(docs) == 1
+    assert docs[0].status == "FAILED"
+    assert docs[0].error_message == "QueueUnavailable: ingestion task was not queued"
+    assert len(jobs) == 1
+    assert jobs[0].status == "FAILED"
+    assert jobs[0].error_message == "QueueUnavailable: ingestion task was not queued"

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, Uuid, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from rag_llm_services_api.db.base import Base
@@ -43,6 +43,8 @@ class IngestionJobModel(Base):
         String(50), nullable=False, default=IngestionJobStatus.PENDING.value, index=True
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    queued_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

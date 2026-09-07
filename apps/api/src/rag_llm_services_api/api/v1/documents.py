@@ -21,12 +21,19 @@ from rag_llm_services_api.api.v1.schemas.documents import (
     IngestionJobResponse,
 )
 from rag_llm_services_api.application.document_service import DocumentApplicationService
-from rag_llm_services_api.core.errors import DuplicateDocumentError, ValidationError
+from rag_llm_services_api.core.errors import DuplicateDocumentError, NotFoundError, ValidationError
 from rag_llm_services_api.db.session import get_session
+from rag_llm_services_api.infrastructure.queue import get_task_queue
+from rag_llm_services_api.infrastructure.queue.base import (
+    IngestionTaskPayload,
+    QueueEnqueueResult,
+    TaskQueue,
+)
 from rag_llm_services_api.infrastructure.repositories.documents import DocumentRepository
 from rag_llm_services_api.infrastructure.repositories.knowledge_bases import KnowledgeBaseRepository
 from rag_llm_services_api.infrastructure.storage.base import ObjectStoragePort, StreamHasher
 from rag_llm_services_api.infrastructure.storage.minio import get_object_storage
+from rag_llm_services_shared.errors import UpstreamUnavailableError
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -67,6 +74,7 @@ async def upload_document(
     owner_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[AsyncSession, Depends(get_session)],
     service: Annotated[DocumentApplicationService, Depends(get_document_service)],
+    queue: Annotated[TaskQueue, Depends(get_task_queue)],
 ) -> DocumentUploadResponse:
     """Upload a document, validate MIME, compute checksum, store in MinIO, and enqueue ingestion."""
     if not file.filename:
@@ -106,12 +114,23 @@ async def upload_document(
         await session.rollback()
         raise
 
+    queue_result = await _enqueue_ingestion_or_fail(
+        session=session,
+        owner_id=owner_id,
+        job_id=job.id,
+        document_id=doc.id,
+        version_id=version.id,
+        queue=queue,
+    )
+
     assert doc.created_at is not None, "Created timestamp must be populated"
 
     return DocumentUploadResponse(
         document_id=doc.id,
         version_id=version.id,
         ingestion_job_id=job.id,
+        queue_task_id=queue_result.task_id,
+        queued=queue_result.queued,
         filename=doc.filename,
         status=doc.status,
         file_size_bytes=version.file_size_bytes,
@@ -219,8 +238,62 @@ async def reindex_document(
     owner_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[AsyncSession, Depends(get_session)],
     service: Annotated[DocumentApplicationService, Depends(get_document_service)],
+    queue: Annotated[TaskQueue, Depends(get_task_queue)],
 ) -> IngestionJobResponse:
     """Create a new ingestion job to reindex the document."""
     job = await service.reindex_document(owner_id, document_id)
     await session.commit()
+    await _enqueue_ingestion_or_fail(
+        session=session,
+        owner_id=owner_id,
+        job_id=job.id,
+        document_id=job.document_id,
+        version_id=job.document_version_id,
+        queue=queue,
+    )
     return IngestionJobResponse.model_validate(job)
+
+
+async def _enqueue_ingestion_or_fail(
+    *,
+    session: AsyncSession,
+    owner_id: UUID,
+    job_id: UUID,
+    document_id: UUID,
+    version_id: UUID,
+    queue: TaskQueue,
+) -> QueueEnqueueResult:
+    payload = IngestionTaskPayload(
+        owner_id=owner_id,
+        job_id=job_id,
+        document_id=document_id,
+        version_id=version_id,
+    )
+    doc_repo = DocumentRepository(session)
+    try:
+        result = await queue.enqueue_ingestion_job(payload)
+    except Exception as exc:
+        await session.rollback()
+        await doc_repo.update_document_status(
+            owner_id=owner_id,
+            doc_id=document_id,
+            status="FAILED",
+            error_message="QueueUnavailable: ingestion task was not queued",
+        )
+        await doc_repo.update_ingestion_job_status(
+            owner_id=owner_id,
+            job_id=job_id,
+            status="FAILED",
+            error_message="QueueUnavailable: ingestion task was not queued",
+        )
+        await session.commit()
+        raise UpstreamUnavailableError("Ingestion queue is unavailable") from exc
+    queued_job = await doc_repo.mark_ingestion_job_queued(
+        owner_id=owner_id,
+        job_id=job_id,
+        queued_task_id=result.task_id,
+    )
+    if queued_job is None:
+        raise NotFoundError("Ingestion job not found")
+    await session.commit()
+    return result

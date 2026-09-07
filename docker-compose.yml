@@ -67,6 +67,49 @@ services:
       exit 0;
       "
 
+  worker:
+    image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+    container_name: rag_worker
+    profiles: ["worker"]
+    restart: unless-stopped
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-create-bucket:
+        condition: service_completed_successfully
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://rag_app:replace-with-local-password@postgres:5432/rag_llm_services}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      QUEUE_PROVIDER: ${QUEUE_PROVIDER:-celery}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+      INGESTION_QUEUE_NAME: ${INGESTION_QUEUE_NAME:-ingestion}
+      INGESTION_TASK_MAX_RETRIES: ${INGESTION_TASK_MAX_RETRIES:-3}
+      INGESTION_TASK_RETRY_BACKOFF_SECONDS: ${INGESTION_TASK_RETRY_BACKOFF_SECONDS:-5}
+      INGESTION_TASK_RETRY_BACKOFF_MAX_SECONDS: ${INGESTION_TASK_RETRY_BACKOFF_MAX_SECONDS:-300}
+      INGESTION_TASK_RETRY_JITTER: ${INGESTION_TASK_RETRY_JITTER:-true}
+      QUEUE_VISIBILITY_TIMEOUT_SECONDS: ${QUEUE_VISIBILITY_TIMEOUT_SECONDS:-3600}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-replace-with-local-minio-access-key}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-replace-with-local-minio-secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-rag-documents}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-bge-m3}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
+    volumes:
+      - .:/app
+    command: >
+      sh -c "uv sync --frozen &&
+      uv run celery -A rag_llm_services_worker.main:celery_app worker
+      --loglevel=INFO
+      --queues=$${INGESTION_QUEUE_NAME:-ingestion}"
+
 volumes:
   postgres_data:
   redis_data:

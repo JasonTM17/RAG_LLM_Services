@@ -103,6 +103,12 @@ def build_dependency_checks(settings: Settings) -> list[DependencyCheck]:
         checks.append(PostgresCheck(name="postgres"))
     if settings.redis.url:
         checks.append(RedisCheck(url=settings.redis.url, name="redis"))
+    if (
+        settings.queue.provider == "celery"
+        and settings.queue.celery_broker_url
+        and settings.queue.celery_broker_url != settings.redis.url
+    ):
+        checks.append(RedisCheck(url=settings.queue.celery_broker_url, name="celery_broker"))
     if settings.minio.endpoint:
         checks.append(MinioCheck(endpoint=settings.minio.endpoint, name="minio"))
     return checks

@@ -51,6 +51,16 @@ KNOWN_ENV_VARS = frozenset(
         "POSTGRES_PASSWORD",
         "DATABASE_URL",
         "REDIS_URL",
+        "QUEUE_PROVIDER",
+        "CELERY_BROKER_URL",
+        "CELERY_RESULT_BACKEND",
+        "INGESTION_QUEUE_NAME",
+        "INGESTION_TASK_MAX_RETRIES",
+        "INGESTION_TASK_RETRY_BACKOFF_SECONDS",
+        "INGESTION_TASK_RETRY_BACKOFF_MAX_SECONDS",
+        "INGESTION_TASK_RETRY_JITTER",
+        "QUEUE_VISIBILITY_TIMEOUT_SECONDS",
+        "RETRIEVAL_CACHE_TTL_SECONDS",
         "MINIO_ENDPOINT",
         "MINIO_ACCESS_KEY",
         "MINIO_SECRET_KEY",
@@ -201,6 +211,49 @@ class RedisSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     url: str = Field("redis://redis:6379/0", validation_alias="REDIS_URL")
+
+
+class QueueSettings(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore")
+
+    provider: str = Field("memory", validation_alias="QUEUE_PROVIDER")
+    celery_broker_url: str = Field("redis://redis:6379/1", validation_alias="CELERY_BROKER_URL")
+    celery_result_backend: str = Field(
+        "redis://redis:6379/2", validation_alias="CELERY_RESULT_BACKEND"
+    )
+    ingestion_queue_name: str = Field("ingestion", validation_alias="INGESTION_QUEUE_NAME")
+    ingestion_task_max_retries: int = Field(
+        3, ge=0, le=10, validation_alias="INGESTION_TASK_MAX_RETRIES"
+    )
+    ingestion_task_retry_backoff_seconds: int = Field(
+        5, ge=1, le=3600, validation_alias="INGESTION_TASK_RETRY_BACKOFF_SECONDS"
+    )
+    ingestion_task_retry_backoff_max_seconds: int = Field(
+        300, ge=1, le=86400, validation_alias="INGESTION_TASK_RETRY_BACKOFF_MAX_SECONDS"
+    )
+    ingestion_task_retry_jitter: bool = Field(True, validation_alias="INGESTION_TASK_RETRY_JITTER")
+    visibility_timeout_seconds: int = Field(
+        3600, ge=60, le=86400, validation_alias="QUEUE_VISIBILITY_TIMEOUT_SECONDS"
+    )
+    retrieval_cache_ttl_seconds: int = Field(
+        300, ge=0, le=86400, validation_alias="RETRIEVAL_CACHE_TTL_SECONDS"
+    )
+
+    @field_validator("provider")
+    @classmethod
+    def _check_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"memory", "celery"}:
+            raise ValueError("QUEUE_PROVIDER must be one of: memory, celery")
+        return normalized
+
+    @field_validator("ingestion_queue_name")
+    @classmethod
+    def _check_queue_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or not all(ch.isalnum() or ch in {"-", "_"} for ch in normalized):
+            raise ValueError("INGESTION_QUEUE_NAME must contain only letters, numbers, '-' or '_'")
+        return normalized
 
 
 class MinioSettings(BaseSettings):
@@ -392,6 +445,7 @@ class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=_settings_factory(DatabaseSettings))
     redis: RedisSettings = Field(default_factory=_settings_factory(RedisSettings))
     minio: MinioSettings = Field(default_factory=_settings_factory(MinioSettings))
+    queue: QueueSettings = Field(default_factory=_settings_factory(QueueSettings))
     llm: LlmSettings = Field(default_factory=_settings_factory(LlmSettings))
     deepseek: DeepseekSettings = Field(default_factory=_settings_factory(DeepseekSettings))
     rag: RagSettings = Field(default_factory=_settings_factory(RagSettings))
@@ -432,6 +486,8 @@ class Settings(BaseSettings):
             problems.append("dev auth must be disabled in production (fail closed)")
         if self.llm.provider != "deepseek":
             problems.append("LLM_PROVIDER must be deepseek in production")
+        if self.queue.provider != "celery":
+            problems.append("QUEUE_PROVIDER must be celery in production")
         if problems:
             raise ConfigurationError("; ".join(problems))
         return self
@@ -458,6 +514,7 @@ __all__ = [
     "ObservabilitySettings",
     "OpenaiAgentsSettings",
     "PostgresSettings",
+    "QueueSettings",
     "RagSettings",
     "RedisSettings",
     "Settings",

@@ -91,6 +91,7 @@ class IngestionPipeline:
         document_id: UUID,
         version_id: UUID | None = None,
         job_id: UUID | None = None,
+        persist_failure: bool = True,
     ) -> IngestionResult:
         """Execute the ingestion pipeline for a document version.
 
@@ -228,7 +229,7 @@ class IngestionPipeline:
             )
 
         except Exception as exc:
-            err_msg = str(exc) or type(exc).__name__
+            err_msg = safe_ingestion_error(exc)
             logger.exception("Ingestion failed for document %s: %s", document_id, err_msg)
             # Record failure state in database safely
             try:
@@ -236,14 +237,15 @@ class IngestionPipeline:
                 if session is not None:
                     await session.rollback()
 
-                await self._transition_status(
-                    owner_id,
-                    document_id,
-                    job_id,
-                    DocumentStatus.FAILED,
-                    IngestionJobStatus.FAILED,
-                    error_message=err_msg,
-                )
+                if persist_failure:
+                    await self._transition_status(
+                        owner_id,
+                        document_id,
+                        job_id,
+                        DocumentStatus.FAILED,
+                        IngestionJobStatus.FAILED,
+                        error_message=err_msg,
+                    )
             except Exception as update_err:  # noqa: BLE001
                 logger.error("Failed to update status to FAILED: %s", update_err)
 
@@ -254,3 +256,16 @@ class IngestionPipeline:
                 status=DocumentStatus.FAILED,
                 error_message=err_msg,
             )
+
+
+def safe_ingestion_error(exc: Exception) -> str:
+    """Return bounded error detail safe for job status storage."""
+    error_type = type(exc).__name__
+    text = str(exc).lower()
+    if isinstance(exc, NotFoundError) or "not found" in text:
+        reason = "input not found"
+    elif "unsupported" in text or "encrypted" in text or "password" in text:
+        reason = "unsupported document content"
+    else:
+        reason = "ingestion failed"
+    return f"{error_type}: {reason}"[:240]

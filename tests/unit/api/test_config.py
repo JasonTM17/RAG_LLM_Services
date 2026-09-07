@@ -58,6 +58,11 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.agents.tool_max_documents == 20
     assert settings.agents.history_max_messages == 8
     assert settings.agents.history_max_chars == 12000
+    assert settings.queue.provider == "memory"
+    assert settings.queue.celery_broker_url == "redis://redis:6379/1"
+    assert settings.queue.ingestion_queue_name == "ingestion"
+    assert settings.queue.ingestion_task_max_retries == 3
+    assert settings.queue.visibility_timeout_seconds == 3600
 
 
 def test_retrieval_defaults_are_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -95,6 +100,7 @@ def test_production_with_dev_auth_enabled_fails_closed(
 ) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("QUEUE_PROVIDER", "celery")
     real = "real-value-not-a-placeholder"
     monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://u:{real}@db:5432/d")
     monkeypatch.setenv("DEEPSEEK_API_KEY", real)
@@ -115,6 +121,7 @@ def test_production_with_complete_config_constructs(
 ) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("QUEUE_PROVIDER", "celery")
     real = "real-value-not-a-placeholder"
     monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://u:{real}@db:5432/d")
     monkeypatch.setenv("DEEPSEEK_API_KEY", real)
@@ -196,7 +203,28 @@ def test_production_guard_covers_every_required_var(
                 continue
             monkeypatch.setenv(key, value)
         monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+        monkeypatch.setenv("QUEUE_PROVIDER", "celery")
         monkeypatch.setenv("APP_ENV", "production")
         with pytest.raises(ConfigurationError) as excinfo:
             Settings(_env_file=None)
         assert missing in str(excinfo.value)
+
+
+def test_production_requires_celery_queue(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("QUEUE_PROVIDER", "memory")
+    real = "real-value-not-a-placeholder"
+    monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://u:{real}@db:5432/d")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", real)
+    monkeypatch.setenv("POSTGRES_PASSWORD", real)
+    monkeypatch.setenv("MINIO_ACCESS_KEY", real)
+    monkeypatch.setenv("MINIO_SECRET_KEY", real)
+    monkeypatch.setenv("N8N_API_KEY", real)
+    monkeypatch.setenv("N8N_ENCRYPTION_KEY", real)
+    monkeypatch.setenv("GRAFANA_ADMIN_PASSWORD", real)
+
+    with pytest.raises(ConfigurationError) as excinfo:
+        Settings(_env_file=None)
+
+    assert "QUEUE_PROVIDER" in str(excinfo.value)

@@ -3,7 +3,7 @@ SHELL := powershell
 
 PLAN_DIR := plans/260906-2101-rag-llm-services-production-platform
 
-.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 verify-phase-07 check-ignore secret-scan api-test api-lint api-typecheck api-migrate api-run acceptance-demo backup-dry-run restore-dry-run
+.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 verify-phase-07 verify-phase-08 check-ignore secret-scan api-test api-lint api-typecheck api-migrate api-run worker-run acceptance-demo backup-dry-run restore-dry-run
 
 help:
 	@Write-Host "RAG_LLM_Services command contract"
@@ -15,6 +15,7 @@ help:
 	@Write-Host "  make verify-phase-05   Run hybrid retrieval and reranking checks"
 	@Write-Host "  make verify-phase-06   Run DeepSeek provider and mocked chat checks"
 	@Write-Host "  make verify-phase-07   Run agent layer and study workflow checks"
+	@Write-Host "  make verify-phase-08   Run async worker and Redis queue checks"
 	@Write-Host "  make check-ignore      Verify .env stays out of Git"
 	@Write-Host "  make secret-scan       Scan tracked workspace excluding local env files"
 	@Write-Host "  make api-test          Run the full pytest suite through uv"
@@ -22,6 +23,7 @@ help:
 	@Write-Host "  make api-typecheck     Run mypy"
 	@Write-Host "  make api-migrate       Apply Alembic migrations to the configured database"
 	@Write-Host "  make api-run           Start the API locally with uvicorn (reload)"
+	@Write-Host "  make worker-run        Start the Celery ingestion worker locally"
 
 plan-status:
 	@ak plan status "$(PLAN_DIR)" --no-interactive
@@ -47,6 +49,9 @@ verify-phase-06:
 verify-phase-07:
 	@.\scripts\verify-phase-07.ps1
 
+verify-phase-08:
+	@.\scripts\verify-phase-08.ps1
+
 
 check-ignore:
 	@git check-ignore -v .env
@@ -62,13 +67,16 @@ api-lint:
 	@uv run ruff format --check .
 
 api-typecheck:
-	@uv run mypy apps/api/src packages
+	@uv run mypy apps/api/src apps/worker/src packages
 
 api-migrate:
 	@uv run alembic -c apps/api/alembic.ini upgrade head
 
 api-run:
 	@uv run uvicorn rag_llm_services_api.main:app --reload --env-file .env --port 8000
+
+worker-run:
+	@$$queue = if ($$env:INGESTION_QUEUE_NAME) { $$env:INGESTION_QUEUE_NAME } else { "ingestion" }; uv run celery -A rag_llm_services_worker.main:celery_app worker --loglevel=INFO --queues $$queue
 
 acceptance-demo:
 	@Write-Error "acceptance-demo is introduced after the API, worker, RAG, and observability phases are implemented."; exit 1

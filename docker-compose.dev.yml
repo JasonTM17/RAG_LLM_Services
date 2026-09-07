@@ -1,0 +1,5 @@
+services:
+  worker:
+    environment:
+      APP_ENV: development
+      QUEUE_PROVIDER: celery

@@ -50,6 +50,8 @@ class DocumentUploadResponse(BaseModel):
     document_id: UUID
     version_id: UUID
     ingestion_job_id: UUID
+    queue_task_id: str | None = None
+    queued: bool = False
     filename: str
     status: str
     file_size_bytes: int
@@ -68,5 +70,14 @@ class IngestionJobResponse(BaseModel):
     document_version_id: UUID
     status: str
     error_message: str | None = None
+    attempt_count: int = 0
+    queued_task_id: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class QueueStatusResponse(BaseModel):
+    """Approximate queue status for ingestion workers."""
+
+    queue_name: str
+    depth: int
