@@ -3,7 +3,7 @@ SHELL := powershell
 
 PLAN_DIR := plans/260906-2101-rag-llm-services-production-platform
 
-.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 verify-phase-07 verify-phase-08 check-ignore secret-scan api-test api-lint api-typecheck api-migrate api-run worker-run acceptance-demo backup-dry-run restore-dry-run
+.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 verify-phase-07 verify-phase-08 verify-phase-09 validate-n8n check-ignore secret-scan api-test api-lint api-typecheck api-migrate api-run worker-run acceptance-demo backup-dry-run restore-dry-run
 
 help:
 	@Write-Host "RAG_LLM_Services command contract"
@@ -16,6 +16,8 @@ help:
 	@Write-Host "  make verify-phase-06   Run DeepSeek provider and mocked chat checks"
 	@Write-Host "  make verify-phase-07   Run agent layer and study workflow checks"
 	@Write-Host "  make verify-phase-08   Run async worker and Redis queue checks"
+	@Write-Host "  make verify-phase-09   Run n8n workflow and compose checks"
+	@Write-Host "  make validate-n8n      Validate source-controlled n8n workflow exports"
 	@Write-Host "  make check-ignore      Verify .env stays out of Git"
 	@Write-Host "  make secret-scan       Scan tracked workspace excluding local env files"
 	@Write-Host "  make api-test          Run the full pytest suite through uv"
@@ -51,6 +53,12 @@ verify-phase-07:
 
 verify-phase-08:
 	@.\scripts\verify-phase-08.ps1
+
+verify-phase-09:
+	@.\scripts\verify-phase-09.ps1
+
+validate-n8n:
+	@uv run python scripts/validate-n8n-workflows.py
 
 
 check-ignore:

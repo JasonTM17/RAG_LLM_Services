@@ -1,5 +1,11 @@
 """Pydantic request and response schemas for API v1."""
 
+from rag_llm_services_api.api.v1.schemas.automation import (
+    AutomationReportRequest,
+    AutomationReportResponse,
+    EvaluationCreateRequest,
+    EvaluationRunResponse,
+)
 from rag_llm_services_api.api.v1.schemas.chat import (
     ChatRequest,
     ChatResponse,
@@ -39,6 +45,8 @@ from rag_llm_services_api.api.v1.schemas.study import (
 )
 
 __all__ = [
+    "AutomationReportRequest",
+    "AutomationReportResponse",
     "ChatRequest",
     "ChatResponse",
     "CitedChunkResponse",
@@ -47,6 +55,8 @@ __all__ = [
     "DocumentResponse",
     "DocumentUploadResponse",
     "DocumentVersionResponse",
+    "EvaluationCreateRequest",
+    "EvaluationRunResponse",
     "FlashcardRequest",
     "FlashcardResponse",
     "FlashcardSetResponse",

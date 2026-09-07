@@ -1,0 +1,125 @@
+{
+  "name": "RAG - Nightly RAG Evaluation",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 2
+            }
+          ]
+        }
+      },
+      "id": "schedule-nightly-evaluation",
+      "name": "Every night",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_BASE_URL + '/evaluations' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-User-Id",
+              "value": "={{ $env.RAG_WORKFLOW_OWNER_ID }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ trigger_source: 'n8n', idempotency_key: $execution.id, workflow_name: 'nightly-rag-evaluation', dataset_name: 'baseline-learning-rag', metadata: { execution_id: $execution.id } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-create-evaluation",
+      "name": "Create evaluation run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.RAG_API_BASE_URL + '/evaluations/' + $json.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-User-Id",
+              "value": "={{ $env.RAG_WORKFLOW_OWNER_ID }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-get-evaluation",
+      "name": "Get evaluation status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_BASE_URL + '/automation/reports' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-User-Id",
+              "value": "={{ $env.RAG_WORKFLOW_OWNER_ID }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ workflow_name: 'nightly-rag-evaluation', run_id: $execution.id, status: 'SUCCEEDED', summary: 'Nightly evaluation trigger recorded', payload: { evaluation_run_id: $json.id, evaluation_status: $json.status, dataset_name: $json.dataset_name } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-report-evaluation",
+      "name": "Record evaluation workflow report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Every night": {
+      "main": [[{ "node": "Create evaluation run", "type": "main", "index": 0 }]]
+    },
+    "Create evaluation run": {
+      "main": [[{ "node": "Get evaluation status", "type": "main", "index": 0 }]]
+    },
+    "Get evaluation status": {
+      "main": [[{ "node": "Record evaluation workflow report", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "timezone": "Asia/Bangkok"
+  },
+  "pinData": {}
+}

@@ -32,6 +32,7 @@ _SCRUB_PREFIXES = (
     "RERANKER_",
     "OPENAI_",
     "N8N_",
+    "GENERIC_",
     "PROMETHEUS_",
     "GRAFANA_",
     "NEXT_PUBLIC_",

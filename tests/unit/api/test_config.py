@@ -63,6 +63,16 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.queue.ingestion_queue_name == "ingestion"
     assert settings.queue.ingestion_task_max_retries == 3
     assert settings.queue.visibility_timeout_seconds == 3600
+    assert settings.n8n.host == "localhost"
+    assert settings.n8n.image == "docker.n8n.io/n8nio/n8n:2.37.11"
+    assert settings.n8n.port == 5678
+    assert settings.n8n.protocol == "http"
+    assert settings.n8n.webhook_url == "http://localhost:5678/"
+    assert settings.n8n.metrics is True
+    assert settings.n8n.metrics_include_default_metrics is True
+    assert settings.n8n.notification_webhook_url is None
+    assert settings.n8n.generic_timezone == "Asia/Bangkok"
+    assert settings.n8n.rag_api_base_url == "http://host.docker.internal:8000/api/v1"
 
 
 def test_retrieval_defaults_are_configurable(monkeypatch: pytest.MonkeyPatch) -> None:

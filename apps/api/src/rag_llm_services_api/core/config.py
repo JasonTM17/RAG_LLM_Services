@@ -102,8 +102,20 @@ KNOWN_ENV_VARS = frozenset(
         "AGENT_HISTORY_MAX_MESSAGES",
         "AGENT_HISTORY_MAX_CHARS",
         "N8N_BASE_URL",
+        "N8N_IMAGE",
+        "N8N_HOST",
+        "N8N_PORT",
+        "N8N_PROTOCOL",
+        "N8N_WEBHOOK_URL",
+        "N8N_METRICS",
+        "N8N_METRICS_INCLUDE_DEFAULT_METRICS",
         "N8N_API_KEY",
         "N8N_ENCRYPTION_KEY",
+        "N8N_NOTIFICATION_WEBHOOK_URL",
+        "N8N_STUDY_TOPIC",
+        "GENERIC_TIMEZONE",
+        "RAG_API_BASE_URL",
+        "RAG_WORKFLOW_OWNER_ID",
         "PROMETHEUS_BASE_URL",
         "GRAFANA_BASE_URL",
         "GRAFANA_ADMIN_USER",
@@ -403,10 +415,40 @@ class N8nSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     base_url: str = Field("http://n8n:5678", validation_alias="N8N_BASE_URL")
+    image: str = Field("docker.n8n.io/n8nio/n8n:2.37.11", validation_alias="N8N_IMAGE")
+    host: str = Field("localhost", validation_alias="N8N_HOST")
+    port: int = Field(5678, ge=1, le=65535, validation_alias="N8N_PORT")
+    protocol: str = Field("http", validation_alias="N8N_PROTOCOL")
+    webhook_url: str = Field("http://localhost:5678/", validation_alias="N8N_WEBHOOK_URL")
+    metrics: bool = Field(True, validation_alias="N8N_METRICS")
+    metrics_include_default_metrics: bool = Field(
+        True, validation_alias="N8N_METRICS_INCLUDE_DEFAULT_METRICS"
+    )
     api_key: str = Field("replace-with-local-n8n-api-key", validation_alias="N8N_API_KEY")
     encryption_key: str = Field(
         "replace-with-local-n8n-encryption-key", validation_alias="N8N_ENCRYPTION_KEY"
     )
+    notification_webhook_url: str | None = Field(
+        None, validation_alias="N8N_NOTIFICATION_WEBHOOK_URL"
+    )
+    study_topic: str = Field("RAG fundamentals", validation_alias="N8N_STUDY_TOPIC")
+    generic_timezone: str = Field("Asia/Bangkok", validation_alias="GENERIC_TIMEZONE")
+    rag_api_base_url: str = Field(
+        "http://host.docker.internal:8000/api/v1",
+        validation_alias="RAG_API_BASE_URL",
+    )
+    workflow_owner_id: UUID = Field(
+        UUID("00000000-0000-0000-0000-000000000001"),
+        validation_alias="RAG_WORKFLOW_OWNER_ID",
+    )
+
+    @field_validator("protocol")
+    @classmethod
+    def _check_protocol(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"http", "https"}:
+            raise ValueError("N8N_PROTOCOL must be one of: http, https")
+        return normalized
 
 
 class ObservabilitySettings(BaseSettings):

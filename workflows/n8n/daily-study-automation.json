@@ -1,0 +1,96 @@
+{
+  "name": "RAG - Daily Study Automation",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "schedule-daily-study",
+      "name": "Every morning",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_BASE_URL + '/study/flashcards' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-User-Id",
+              "value": "={{ $env.RAG_WORKFLOW_OWNER_ID }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ topic: $env.N8N_STUDY_TOPIC || 'RAG fundamentals', card_count: 5, difficulty: 'intermediate', max_output_tokens: 1200 }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-create-flashcards",
+      "name": "Create flashcards",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0],
+      "retryOnFail": false,
+      "maxTries": 1,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_BASE_URL + '/automation/reports' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-User-Id",
+              "value": "={{ $env.RAG_WORKFLOW_OWNER_ID }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ workflow_name: 'daily-study-automation', run_id: $execution.id, status: 'SUCCEEDED', summary: 'Daily flashcard generation completed', payload: { conversation_id: $json.conversation_id, topic: $json.topic, card_count: Array.isArray($json.cards) ? $json.cards.length : 0 } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-report-study",
+      "name": "Record study workflow report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Every morning": {
+      "main": [[{ "node": "Create flashcards", "type": "main", "index": 0 }]]
+    },
+    "Create flashcards": {
+      "main": [[{ "node": "Record study workflow report", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "timezone": "Asia/Bangkok"
+  },
+  "pinData": {}
+}

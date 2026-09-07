@@ -1,0 +1,93 @@
+{
+  "name": "RAG - Scheduled Knowledge Sync",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-knowledge-sync",
+      "name": "Every six hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.RAG_API_BASE_URL + '/knowledge-bases' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-User-Id",
+              "value": "={{ $env.RAG_WORKFLOW_OWNER_ID }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-list-knowledge-bases",
+      "name": "List knowledge bases",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_BASE_URL + '/automation/reports' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-User-Id",
+              "value": "={{ $env.RAG_WORKFLOW_OWNER_ID }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ workflow_name: 'scheduled-knowledge-sync', run_id: $execution.id, status: 'SUCCEEDED', summary: 'Knowledge base sync inventory completed', payload: { knowledge_base_count: Array.isArray($json) ? $json.length : 0 } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-report-knowledge-sync",
+      "name": "Record sync workflow report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Every six hours": {
+      "main": [[{ "node": "List knowledge bases", "type": "main", "index": 0 }]]
+    },
+    "List knowledge bases": {
+      "main": [[{ "node": "Record sync workflow report", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "timezone": "Asia/Bangkok"
+  },
+  "pinData": {}
+}

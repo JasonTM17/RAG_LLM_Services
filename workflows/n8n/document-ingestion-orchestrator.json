@@ -1,0 +1,89 @@
+{
+  "name": "RAG - Document Ingestion Orchestrator",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rag/document-ingestion-orchestrator",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-document-ingestion",
+      "name": "Webhook: ingestion status requested",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.RAG_API_BASE_URL + '/ingestion-jobs/' + $json.job_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-User-Id",
+              "value": "={{ $env.RAG_WORKFLOW_OWNER_ID }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-get-ingestion-job",
+      "name": "Get ingestion job status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_BASE_URL + '/automation/reports' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-User-Id",
+              "value": "={{ $env.RAG_WORKFLOW_OWNER_ID }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ workflow_name: 'document-ingestion-orchestrator', run_id: $execution.id, status: $json.status === 'FAILED' ? 'FAILED' : 'RUNNING', summary: 'Ingestion job status poll completed', payload: { job_id: $json.id, document_id: $json.document_id, ingestion_status: $json.status } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-report-ingestion",
+      "name": "Record ingestion workflow report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Webhook: ingestion status requested": {
+      "main": [[{ "node": "Get ingestion job status", "type": "main", "index": 0 }]]
+    },
+    "Get ingestion job status": {
+      "main": [[{ "node": "Record ingestion workflow report", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "timezone": "Asia/Bangkok"
+  },
+  "pinData": {}
+}

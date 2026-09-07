@@ -30,6 +30,10 @@ Use `.env` for local runtime secrets and `.env.example` for placeholders. Do not
 - Grafana datasource and dashboards provision from source-controlled files.
 - n8n workflows import without credentials.
 
+## n8n
+
+`docker-compose.yml` includes an `n8n` service backed by the `n8n_data` volume. It is configured through `.env` substitution, enables `N8N_METRICS`, and receives only runtime environment variables, not exported credentials. Workflow JSON lives under `workflows/n8n/` and must pass `uv run python scripts/validate-n8n-workflows.py` before commit.
+
 ## Non-Goals
 
 - Kubernetes manifests.

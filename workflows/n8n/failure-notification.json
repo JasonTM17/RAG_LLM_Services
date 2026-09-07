@@ -1,0 +1,100 @@
+{
+  "name": "RAG - Failure Notification",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Workflow error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_BASE_URL + '/automation/reports' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-User-Id",
+              "value": "={{ $env.RAG_WORKFLOW_OWNER_ID }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ workflow_name: 'failure-notification', run_id: $execution.id, status: 'FAILED', summary: 'n8n workflow error trigger fired', payload: { source_workflow_id: $json.workflow && $json.workflow.id, source_execution_id: $json.execution && $json.execution.id, error_message: $json.error && $json.error.message } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-report-failure",
+      "name": "Record failure report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, -80],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $env.N8N_NOTIFICATION_WEBHOOK_URL }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "if-notification-configured",
+      "name": "Notification webhook configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [260, 80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_NOTIFICATION_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: 'RAG n8n workflow failed', execution_id: $json.execution && $json.execution.id, workflow_id: $json.workflow && $json.workflow.id }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-send-notification",
+      "name": "Send configured notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 80],
+      "retryOnFail": false,
+      "maxTries": 1,
+      "waitBetweenTries": 1000
+    }
+  ],
+  "connections": {
+    "Workflow error": {
+      "main": [
+        [
+          { "node": "Record failure report", "type": "main", "index": 0 },
+          { "node": "Notification webhook configured", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Notification webhook configured": {
+      "main": [[{ "node": "Send configured notification", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "timezone": "Asia/Bangkok"
+  },
+  "pinData": {}
+}
