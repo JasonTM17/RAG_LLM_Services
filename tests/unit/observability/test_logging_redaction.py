@@ -271,3 +271,18 @@ def test_short_and_empty_known_secrets_do_not_cause_over_redaction() -> None:
     # And empty string must not insert REDACTED between every character.
     assert payload["service"] == "rag-llm-services-api"
     assert payload["env"] == "test"
+
+
+def test_known_secrets_with_prefix_overlap_does_not_leak_suffix() -> None:
+    """Longer secret must be redacted cleanly even when passed after a shorter prefix."""
+    record = _record("bearer token: supersecret_extended_token is used")
+    payload = _format(
+        record,
+        # 'supersecret' is a prefix of 'supersecret_extended_token'.
+        # If iterated in input order without sorting by length, 'supersecret'
+        # would be replaced first, leaking '_extended_token'.
+        known_secrets=("supersecret", "supersecret_extended_token"),
+    )
+    msg = str(payload["message"])
+    assert "_extended_token" not in msg
+    assert f"bearer token: {REDACTED} is used" == msg

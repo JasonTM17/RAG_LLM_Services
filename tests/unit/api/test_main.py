@@ -18,6 +18,7 @@ def test_collect_known_secrets_ignores_placeholders_and_short_secrets(
 
     # Set real secrets, including short ones and empty ones.
     monkeypatch.setenv("POSTGRES_PASSWORD", "short")  # 5 chars -> should be skipped (< 6)
+    monkeypatch.setenv("MINIO_ACCESS_KEY", "minio-valid-access-key")  # >= 6 chars -> included
     monkeypatch.setenv("MINIO_SECRET_KEY", "minio-valid-secret-12345")  # >= 6 chars -> included
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-valid-deepseek-key-12345")  # >= 6 chars -> included
     monkeypatch.setenv("N8N_API_KEY", "12345")  # 5 chars -> should be skipped (< 6)
@@ -32,6 +33,7 @@ def test_collect_known_secrets_ignores_placeholders_and_short_secrets(
     assert "short" not in collected
     assert "12345" not in collected
     assert "" not in collected
+    assert "minio-valid-access-key" in collected
     assert "minio-valid-secret-12345" in collected
     assert "sk-valid-deepseek-key-12345" in collected
     assert "grafana-password-secure" in collected

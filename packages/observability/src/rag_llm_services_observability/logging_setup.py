@@ -155,7 +155,11 @@ class JsonFormatter(logging.Formatter):
         self.service = service
         self.env = env
         self.known_secrets = tuple(
-            secret for secret in known_secrets if secret and len(secret) >= 6
+            sorted(
+                {secret for secret in known_secrets if secret and len(secret) >= 6},
+                key=len,
+                reverse=True,
+            )
         )
 
     def format(self, record: logging.LogRecord) -> str:

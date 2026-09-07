@@ -14,6 +14,9 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
+from starlette.responses import Response
 
 from rag_llm_services_api.core.errors import AppError
 from rag_llm_services_api.main import create_app
@@ -159,4 +162,51 @@ async def test_not_found_404_includes_request_id_in_header_and_body(
 
     body = response.json()
     assert body["error"]["code"] == "NOT_FOUND"
+    assert body["error"]["request_id"] == header_id
+
+
+async def test_unhandled_500_outer_middleware_crash_preserves_request_id() -> None:
+    """Outer middleware crashing before RequestIdMiddleware preserves client X-Request-ID."""
+    app = create_app()
+
+    class _CrashingOuterMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+            raise RuntimeError("outer middleware explosion before RequestIdMiddleware")
+
+    app.add_middleware(_CrashingOuterMiddleware)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    custom_id = "client-header-trace-12345"
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/health/live", headers={REQUEST_ID_HEADER: custom_id})
+
+    assert response.status_code == 500
+    assert response.headers.get(REQUEST_ID_HEADER) == custom_id
+    body = response.json()
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["message"] == "Internal server error"
+    assert body["error"]["request_id"] == custom_id
+
+
+async def test_unhandled_500_outer_middleware_crash_generates_fresh_request_id_if_missing() -> None:
+    """Outer middleware crash without client header generates fresh UUID on 500."""
+    app = create_app()
+
+    class _CrashingOuterMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+            raise RuntimeError("outer middleware explosion without client header")
+
+    app.add_middleware(_CrashingOuterMiddleware)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/health/live")
+
+    assert response.status_code == 500
+    header_id = response.headers.get(REQUEST_ID_HEADER)
+    assert header_id is not None
+    assert _HEX_UUID_PATTERN.fullmatch(header_id) is not None
+    body = response.json()
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["message"] == "Internal server error"
     assert body["error"]["request_id"] == header_id

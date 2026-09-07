@@ -30,6 +30,7 @@ def _collect_known_secrets(settings: Settings) -> tuple[str, ...]:
     """
     candidates = (
         settings.postgres.password,
+        settings.minio.access_key,
         settings.minio.secret_key,
         settings.deepseek.api_key,
         settings.n8n.api_key,

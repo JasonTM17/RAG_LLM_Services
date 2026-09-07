@@ -147,3 +147,20 @@ async def test_ok_route_is_not_reshaped(client: AsyncClient) -> None:
     response = await client.get("/ok")
     assert response.status_code == 200
     assert response.json() == {}
+
+
+async def test_handlers_handle_request_without_state_attribute() -> None:
+    """Request objects lacking a state attribute do not crash error response generation."""
+    from unittest.mock import MagicMock
+
+    from rag_llm_services_api.core.error_handlers import (
+        _error_response,
+        unhandled_exception_handler,
+    )
+
+    mock_request = MagicMock(spec=[])
+    resp = _error_response(500, "INTERNAL_ERROR", "Internal server error", request=mock_request)
+    assert resp.status_code == 500
+
+    handler_resp = await unhandled_exception_handler(mock_request, RuntimeError("crash"))
+    assert handler_resp.status_code == 500

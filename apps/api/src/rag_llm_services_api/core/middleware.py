@@ -9,7 +9,6 @@ request executed by the same task.
 
 from __future__ import annotations
 
-import re
 import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -18,9 +17,9 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from rag_llm_services_observability.context import request_id_var, set_request_id
-from rag_llm_services_shared.constants import REQUEST_ID_HEADER
+from rag_llm_services_shared.constants import CLIENT_REQUEST_ID_PATTERN, REQUEST_ID_HEADER
 
-_CLIENT_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+_CLIENT_REQUEST_ID_PATTERN = CLIENT_REQUEST_ID_PATTERN
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
