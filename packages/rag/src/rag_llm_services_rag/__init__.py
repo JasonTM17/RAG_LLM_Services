@@ -1,4 +1,4 @@
-"""RAG parsing, normalization, and chunking package."""
+"""RAG parsing, normalization, chunking, and retrieval package."""
 
 from rag_llm_services_rag.chunking import Chunker, ChunkPayload
 from rag_llm_services_rag.normalization import TextNormalizer, normalize_text
@@ -13,19 +13,61 @@ from rag_llm_services_rag.parsers import (
     TextParser,
     get_default_parser_registry,
 )
+from rag_llm_services_rag.retrieval import (
+    BGERerankerProvider,
+    CandidateChunk,
+    CitedChunk,
+    ContextBuilder,
+    ContextBundle,
+    FakeRerankerProvider,
+    InMemoryKeywordBackend,
+    InMemoryVectorBackend,
+    KeywordRetriever,
+    NullRerankerProvider,
+    QueryNormalizer,
+    ReciprocalRankFusion,
+    RerankerProvider,
+    RetrievalFilter,
+    RetrievalMethod,
+    RetrievalResult,
+    VectorRetriever,
+    cosine_similarity,
+    format_source_header,
+    normalize_query,
+)
 
 __all__ = [
+    "BGERerankerProvider",
+    "CandidateChunk",
     "ChunkPayload",
     "Chunker",
+    "CitedChunk",
+    "ContextBuilder",
+    "ContextBundle",
     "DocumentParser",
     "DocxParser",
+    "FakeRerankerProvider",
+    "InMemoryKeywordBackend",
+    "InMemoryVectorBackend",
+    "KeywordRetriever",
     "MarkdownParser",
+    "NullRerankerProvider",
     "PDFParser",
     "ParsedDocument",
     "ParsedSection",
     "ParserRegistry",
+    "QueryNormalizer",
+    "ReciprocalRankFusion",
+    "RerankerProvider",
+    "RetrievalFilter",
+    "RetrievalMethod",
+    "RetrievalResult",
     "TextNormalizer",
     "TextParser",
+    "VectorRetriever",
+    "cosine_similarity",
+    "format_source_header",
     "get_default_parser_registry",
+    "normalize_query",
     "normalize_text",
 ]

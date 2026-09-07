@@ -11,6 +11,21 @@ from rag_llm_services_embeddings.fake import FakeEmbeddingProvider
 
 
 @lru_cache
+def _get_cached_embedding_provider(
+    provider_name: str, model_name: str, app_env: str
+) -> EmbeddingProvider:
+    if provider_name == "fake" or app_env == "test":
+        return FakeEmbeddingProvider(
+            dimension=1024,
+            model_name=model_name,
+        )
+
+    return BGEM3EmbeddingProvider(
+        model_name=model_name,
+        device="cpu",
+    )
+
+
 def get_embedding_provider(settings: Settings | None = None) -> EmbeddingProvider:
     """Return configured embedding provider singleton.
 
@@ -19,14 +34,4 @@ def get_embedding_provider(settings: Settings | None = None) -> EmbeddingProvide
     """
     cfg = settings or get_settings()
     provider_name = cfg.embedding.provider.lower().strip()
-
-    if provider_name == "fake" or cfg.app.env == "test":
-        return FakeEmbeddingProvider(
-            dimension=1024,
-            model_name=cfg.embedding.model,
-        )
-
-    return BGEM3EmbeddingProvider(
-        model_name=cfg.embedding.model,
-        device="cpu",
-    )
+    return _get_cached_embedding_provider(provider_name, cfg.embedding.model, cfg.app.env)

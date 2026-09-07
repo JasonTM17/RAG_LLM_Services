@@ -6,7 +6,7 @@ The target system lets a user upload learning documents, build owner-scoped know
 
 ## Current Status
 
-This repository has completed Phase 01 (repository contract, architecture docs, ADRs, environment contract) and Phase 02 (backend foundation). The FastAPI app now boots locally with typed settings, structured redacting JSON logs, request IDs, the standard error envelope, async SQLAlchemy with an Alembic baseline, and health endpoints. Worker, frontend, compose services, and acceptance demo behavior are intentionally not implemented yet.
+This repository has completed Phases 01-05: repository contract, backend foundation, document management/storage, RAG ingestion/embeddings, and hybrid retrieval/reranking. The FastAPI app now supports typed settings, structured redacting JSON logs, request IDs, standard error envelopes, async SQLAlchemy/Alembic, health endpoints, owner-scoped knowledge bases/documents, upload/download/delete APIs, parser/chunking/embedding ingestion, and `POST /api/v1/retrieval/search` with bounded source-labeled context. DeepSeek LLM, agent workflows, async worker, frontend, full Prometheus `/metrics`, CI, deployment, and acceptance-demo behavior are intentionally not implemented yet.
 
 ## Architecture
 
@@ -29,7 +29,7 @@ More detail:
 
 ## Runtime Defaults
 
-- Python: `3.13` through `uv` (uv workspace members: `apps/api`, `packages/shared`, `packages/observability`).
+- Python: `3.13` through `uv` (uv workspace members: `apps/api`, `packages/shared`, `packages/observability`, `packages/rag`, `packages/embeddings`).
 - Node: `24.12.0` with `pnpm`.
 - DeepSeek OpenAI-compatible base URL: `https://api.deepseek.com`.
 - Primary model alias: `deepseek-v4-flash`.
@@ -42,11 +42,14 @@ AgentKit skill mirrors under `.codex/skills/`, `.claude/skills/`, `.cursor/skill
 
 ## Command Contract
 
-Phase 01 and Phase 02 checks:
+Phase checks:
 
 ```powershell
 .\scripts\verify-phase-01.ps1
 .\scripts\verify-phase-02.ps1
+.\scripts\verify-phase-03.ps1
+.\scripts\verify-phase-04.ps1
+.\scripts\verify-phase-05.ps1
 ```
 
 The Makefile mirrors the same contract for environments with `make`:
@@ -56,13 +59,16 @@ make help
 make plan-status
 make verify-phase-01
 make verify-phase-02
+make verify-phase-03
+make verify-phase-04
+make verify-phase-05
 make api-test      # uv run pytest -q
 make api-lint      # ruff check + format check
 make api-migrate   # alembic upgrade head (needs a configured Postgres)
 make api-run       # uvicorn with reload on :8000
 ```
 
-Health endpoints once the API is running: `GET /health/live` (process-only) and `GET /health/ready` (bounded Postgres/Redis/MinIO probes). Future phases will add runnable worker, web, compose, backup, restore, and acceptance-demo targets.
+Health endpoints once the API is running: `GET /health/live` (process-only) and `GET /health/ready` (bounded Postgres/Redis/MinIO probes). Retrieval search is available at `POST /api/v1/retrieval/search` after documents have been indexed. Future phases will add runnable worker, web, DeepSeek chat, Prometheus scrape endpoint, backup, restore, and acceptance-demo targets.
 
 ## Plan Authority
 

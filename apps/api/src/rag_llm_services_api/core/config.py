@@ -67,7 +67,12 @@ KNOWN_ENV_VARS = frozenset(
         "LLM_DAILY_ESTIMATED_COST_LIMIT_USD",
         "LLM_REQUEST_TIMEOUT_SECONDS",
         "RAG_CONTEXT_TOKEN_BUDGET",
+        "RAG_VECTOR_TOP_K",
+        "RAG_KEYWORD_TOP_K",
         "RAG_RERANK_TOP_K",
+        "RAG_RRF_K",
+        "RAG_RRF_VECTOR_WEIGHT",
+        "RAG_RRF_KEYWORD_WEIGHT",
         "EMBEDDING_PROVIDER",
         "EMBEDDING_MODEL",
         "RERANKER_PROVIDER",
@@ -235,7 +240,12 @@ class RagSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     context_token_budget: int = Field(6000, validation_alias="RAG_CONTEXT_TOKEN_BUDGET")
-    rerank_top_k: int = Field(8, validation_alias="RAG_RERANK_TOP_K")
+    vector_top_k: int = Field(10, ge=1, le=100, validation_alias="RAG_VECTOR_TOP_K")
+    keyword_top_k: int = Field(10, ge=1, le=100, validation_alias="RAG_KEYWORD_TOP_K")
+    rerank_top_k: int = Field(8, ge=1, le=50, validation_alias="RAG_RERANK_TOP_K")
+    rrf_k: int = Field(60, ge=1, validation_alias="RAG_RRF_K")
+    rrf_vector_weight: float = Field(1.0, ge=0.0, validation_alias="RAG_RRF_VECTOR_WEIGHT")
+    rrf_keyword_weight: float = Field(1.0, ge=0.0, validation_alias="RAG_RRF_KEYWORD_WEIGHT")
 
 
 class EmbeddingSettings(BaseSettings):

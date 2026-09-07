@@ -42,6 +42,30 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.deepseek.base_url == "https://api.deepseek.com"
     assert settings.deepseek.model == "deepseek-v4-flash"
     assert settings.deepseek.run_live_tests is False
+    assert settings.rag.vector_top_k == 10
+    assert settings.rag.keyword_top_k == 10
+    assert settings.rag.rerank_top_k == 8
+    assert settings.rag.rrf_k == 60
+    assert settings.rag.rrf_vector_weight == 1.0
+    assert settings.rag.rrf_keyword_weight == 1.0
+
+
+def test_retrieval_defaults_are_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RAG_VECTOR_TOP_K", "12")
+    monkeypatch.setenv("RAG_KEYWORD_TOP_K", "7")
+    monkeypatch.setenv("RAG_RERANK_TOP_K", "5")
+    monkeypatch.setenv("RAG_RRF_K", "42")
+    monkeypatch.setenv("RAG_RRF_VECTOR_WEIGHT", "1.5")
+    monkeypatch.setenv("RAG_RRF_KEYWORD_WEIGHT", "0.7")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.rag.vector_top_k == 12
+    assert settings.rag.keyword_top_k == 7
+    assert settings.rag.rerank_top_k == 5
+    assert settings.rag.rrf_k == 42
+    assert settings.rag.rrf_vector_weight == 1.5
+    assert settings.rag.rrf_keyword_weight == 0.7
 
 
 def test_production_with_placeholder_secret_raises_and_hides_value(
