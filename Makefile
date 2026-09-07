@@ -3,7 +3,7 @@ SHELL := powershell
 
 PLAN_DIR := plans/260906-2101-rag-llm-services-production-platform
 
-.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 check-ignore secret-scan api-test api-lint api-typecheck api-migrate api-run acceptance-demo backup-dry-run restore-dry-run
+.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 check-ignore secret-scan api-test api-lint api-typecheck api-migrate api-run acceptance-demo backup-dry-run restore-dry-run
 
 help:
 	@Write-Host "RAG_LLM_Services command contract"
@@ -13,6 +13,7 @@ help:
 	@Write-Host "  make verify-phase-03   Run document management checks"
 	@Write-Host "  make verify-phase-04   Run RAG ingestion and embeddings checks"
 	@Write-Host "  make verify-phase-05   Run hybrid retrieval and reranking checks"
+	@Write-Host "  make verify-phase-06   Run DeepSeek provider and mocked chat checks"
 	@Write-Host "  make check-ignore      Verify .env stays out of Git"
 	@Write-Host "  make secret-scan       Scan tracked workspace excluding local env files"
 	@Write-Host "  make api-test          Run the full pytest suite through uv"
@@ -38,6 +39,9 @@ verify-phase-04:
 
 verify-phase-05:
 	@.\scripts\verify-phase-05.ps1
+
+verify-phase-06:
+	@.\scripts\verify-phase-06.ps1
 
 
 check-ignore:

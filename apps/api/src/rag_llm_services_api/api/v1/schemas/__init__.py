@@ -1,5 +1,10 @@
 """Pydantic request and response schemas for API v1."""
 
+from rag_llm_services_api.api.v1.schemas.chat import (
+    ChatRequest,
+    ChatResponse,
+    LLMUsageResponse,
+)
 from rag_llm_services_api.api.v1.schemas.documents import (
     DocumentDetailResponse,
     DocumentResponse,
@@ -22,6 +27,8 @@ from rag_llm_services_api.api.v1.schemas.retrieval import (
 )
 
 __all__ = [
+    "ChatRequest",
+    "ChatResponse",
     "CitedChunkResponse",
     "ContextBundleResponse",
     "DocumentDetailResponse",
@@ -32,6 +39,7 @@ __all__ = [
     "KnowledgeBaseCreate",
     "KnowledgeBaseResponse",
     "KnowledgeBaseUpdate",
+    "LLMUsageResponse",
     "RetrievalChunkResponse",
     "RetrievalFilterSchema",
     "RetrievalSearchRequest",

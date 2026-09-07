@@ -22,6 +22,7 @@ dependencies = [
     "rag-llm-services-observability",
     "rag-llm-services-rag",
     "rag-llm-services-embeddings",
+    "rag-llm-services-llm",
 ]
 
 [tool.uv.sources]
@@ -29,6 +30,7 @@ rag-llm-services-shared = { workspace = true }
 rag-llm-services-observability = { workspace = true }
 rag-llm-services-rag = { workspace = true }
 rag-llm-services-embeddings = { workspace = true }
+rag-llm-services-llm = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

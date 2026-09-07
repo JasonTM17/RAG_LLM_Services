@@ -18,6 +18,7 @@ from rag_llm_services_api.core.config import PLACEHOLDER_MARKERS, Settings, get_
 from rag_llm_services_api.core.error_handlers import register_exception_handlers
 from rag_llm_services_api.core.middleware import RequestIdMiddleware
 from rag_llm_services_api.db.session import dispose_engine
+from rag_llm_services_api.infrastructure.llm import dispose_llm_provider
 from rag_llm_services_observability.logging_setup import configure_logging
 
 
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         known_secrets=_collect_known_secrets(settings),
     )
     yield
+    await dispose_llm_provider()
     await dispose_engine()
 
 

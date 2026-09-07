@@ -39,8 +39,11 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(_env_file=None)
     assert settings.app.env == "local"
     assert settings.app.api_port == 8000
+    assert settings.llm.provider == "fake"
     assert settings.deepseek.base_url == "https://api.deepseek.com"
     assert settings.deepseek.model == "deepseek-v4-flash"
+    assert settings.deepseek.api_mode == "responses"
+    assert settings.deepseek.max_retries == 2
     assert settings.deepseek.run_live_tests is False
     assert settings.rag.vector_top_k == 10
     assert settings.rag.keyword_top_k == 10
@@ -84,6 +87,7 @@ def test_production_with_dev_auth_enabled_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     real = "real-value-not-a-placeholder"
     monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://u:{real}@db:5432/d")
     monkeypatch.setenv("DEEPSEEK_API_KEY", real)
@@ -103,6 +107,7 @@ def test_production_with_complete_config_constructs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     real = "real-value-not-a-placeholder"
     monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://u:{real}@db:5432/d")
     monkeypatch.setenv("DEEPSEEK_API_KEY", real)
@@ -183,6 +188,7 @@ def test_production_guard_covers_every_required_var(
             if key == missing:
                 continue
             monkeypatch.setenv(key, value)
+        monkeypatch.setenv("LLM_PROVIDER", "deepseek")
         monkeypatch.setenv("APP_ENV", "production")
         with pytest.raises(ConfigurationError) as excinfo:
             Settings(_env_file=None)

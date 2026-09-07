@@ -15,6 +15,8 @@ Use OpenAI Agents SDK in application code with a custom OpenAI-compatible DeepSe
 ## Consequences
 
 - Business services call the gateway, not DeepSeek directly.
+- Local/test runtime defaults to a fake LLM provider so automated tests and development do not make paid API calls.
+- Production must set `LLM_PROVIDER=deepseek` and a real `DEEPSEEK_API_KEY`.
 - Chat Completions fallback is disabled by default and must log a safe fallback reason when explicitly enabled.
 - Provider-side continuation is not assumed; conversation state is stored locally.
 - Live DeepSeek tests remain opt-in and use synthetic public prompts.

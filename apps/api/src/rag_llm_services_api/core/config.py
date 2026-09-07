@@ -61,6 +61,12 @@ KNOWN_ENV_VARS = frozenset(
         "DEEPSEEK_MODEL",
         "DEEPSEEK_API_MODE",
         "DEEPSEEK_ALLOW_CHAT_COMPLETIONS_FALLBACK",
+        "DEEPSEEK_FALLBACK_REASON",
+        "DEEPSEEK_MAX_RETRIES",
+        "DEEPSEEK_RETRY_BACKOFF_SECONDS",
+        "DEEPSEEK_ESTIMATED_INPUT_CACHE_MISS_USD_PER_1M",
+        "DEEPSEEK_ESTIMATED_INPUT_CACHE_HIT_USD_PER_1M",
+        "DEEPSEEK_ESTIMATED_OUTPUT_USD_PER_1M",
         "RUN_DEEPSEEK_LIVE_TESTS",
         "LLM_MAX_INPUT_TOKENS",
         "LLM_MAX_OUTPUT_TOKENS",
@@ -204,13 +210,21 @@ class MinioSettings(BaseSettings):
 class LlmSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    provider: str = Field("deepseek", validation_alias="LLM_PROVIDER")
+    provider: str = Field("fake", validation_alias="LLM_PROVIDER")
     max_input_tokens: int = Field(12000, validation_alias="LLM_MAX_INPUT_TOKENS")
     max_output_tokens: int = Field(2048, validation_alias="LLM_MAX_OUTPUT_TOKENS")
     daily_estimated_cost_limit_usd: float = Field(
         5.0, validation_alias="LLM_DAILY_ESTIMATED_COST_LIMIT_USD"
     )
     request_timeout_seconds: int = Field(60, validation_alias="LLM_REQUEST_TIMEOUT_SECONDS")
+
+    @field_validator("provider")
+    @classmethod
+    def _check_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"fake", "deepseek"}:
+            raise ValueError("LLM_PROVIDER must be one of: fake, deepseek")
+        return normalized
 
 
 class DeepseekSettings(BaseSettings):
@@ -225,6 +239,20 @@ class DeepseekSettings(BaseSettings):
     allow_chat_completions_fallback: bool = Field(
         False, validation_alias="DEEPSEEK_ALLOW_CHAT_COMPLETIONS_FALLBACK"
     )
+    fallback_reason: str | None = Field(None, validation_alias="DEEPSEEK_FALLBACK_REASON")
+    max_retries: int = Field(2, ge=0, le=5, validation_alias="DEEPSEEK_MAX_RETRIES")
+    retry_backoff_seconds: float = Field(
+        0.25, ge=0.0, le=10.0, validation_alias="DEEPSEEK_RETRY_BACKOFF_SECONDS"
+    )
+    estimated_input_cache_miss_usd_per_1m: float = Field(
+        0.0, ge=0.0, validation_alias="DEEPSEEK_ESTIMATED_INPUT_CACHE_MISS_USD_PER_1M"
+    )
+    estimated_input_cache_hit_usd_per_1m: float = Field(
+        0.0, ge=0.0, validation_alias="DEEPSEEK_ESTIMATED_INPUT_CACHE_HIT_USD_PER_1M"
+    )
+    estimated_output_usd_per_1m: float = Field(
+        0.0, ge=0.0, validation_alias="DEEPSEEK_ESTIMATED_OUTPUT_USD_PER_1M"
+    )
     run_live_tests: bool = Field(False, validation_alias="RUN_DEEPSEEK_LIVE_TESTS")
 
     @field_validator("base_url")
@@ -234,6 +262,39 @@ class DeepseekSettings(BaseSettings):
         if normalized.endswith("/v1"):
             raise ValueError("DEEPSEEK_BASE_URL must not include the /v1 path suffix")
         return normalized
+
+    @field_validator("api_mode")
+    @classmethod
+    def _check_api_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"responses", "chat_completions"}:
+            raise ValueError("DEEPSEEK_API_MODE must be one of: responses, chat_completions")
+        return normalized
+
+    @field_validator("fallback_reason")
+    @classmethod
+    def _normalize_fallback_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if len(normalized) > 240:
+            raise ValueError("DEEPSEEK_FALLBACK_REASON must be 240 characters or fewer")
+        return normalized
+
+    @model_validator(mode="after")
+    def _fallback_requires_reason(self) -> "DeepseekSettings":
+        fallback_selected = self.api_mode == "chat_completions"
+        if fallback_selected and not self.allow_chat_completions_fallback:
+            raise ValueError(
+                "DEEPSEEK_ALLOW_CHAT_COMPLETIONS_FALLBACK must be true for chat_completions mode"
+            )
+        if self.allow_chat_completions_fallback and not self.fallback_reason:
+            raise ValueError(
+                "DEEPSEEK_FALLBACK_REASON is required when Chat Completions fallback is enabled"
+            )
+        return self
 
 
 class RagSettings(BaseSettings):
@@ -347,6 +408,8 @@ class Settings(BaseSettings):
             problems.append("missing or placeholder values for: " + ", ".join(sorted(offending)))
         if self.dev_auth.auth_enabled:
             problems.append("dev auth must be disabled in production (fail closed)")
+        if self.llm.provider != "deepseek":
+            problems.append("LLM_PROVIDER must be deepseek in production")
         if problems:
             raise ConfigurationError("; ".join(problems))
         return self

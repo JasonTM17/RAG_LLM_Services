@@ -12,6 +12,7 @@ dependencies = [
     "rag-llm-services-observability",
     "rag-llm-services-rag",
     "rag-llm-services-embeddings",
+    "rag-llm-services-llm",
 ]
 
 [dependency-groups]
@@ -25,6 +26,7 @@ members = [
     "packages/observability",
     "packages/rag",
     "packages/embeddings",
+    "packages/llm",
 ]
 
 [tool.uv.sources]
@@ -33,6 +35,7 @@ rag-llm-services-shared = { workspace = true }
 rag-llm-services-observability = { workspace = true }
 rag-llm-services-rag = { workspace = true }
 rag-llm-services-embeddings = { workspace = true }
+rag-llm-services-llm = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -48,6 +51,7 @@ src = [
     "packages/observability/src",
     "packages/rag/src",
     "packages/embeddings/src",
+    "packages/llm/src",
     "tests",
 ]
 
