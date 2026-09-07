@@ -136,6 +136,7 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-replace-with-local-n8n-encryption-key}
       N8N_METRICS: ${N8N_METRICS:-true}
       N8N_METRICS_INCLUDE_DEFAULT_METRICS: ${N8N_METRICS_INCLUDE_DEFAULT_METRICS:-true}
+      N8N_METRICS_INCLUDE_QUEUE_METRICS: ${N8N_METRICS_INCLUDE_QUEUE_METRICS:-true}
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_PERSONALIZATION_ENABLED: "false"
@@ -176,6 +177,28 @@ services:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:13.2.1}
+    container_name: rag_grafana
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_started
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-replace-with-local-grafana-password}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/opt/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
 
   postgres-exporter:
     image: ${POSTGRES_EXPORTER_IMAGE:-quay.io/prometheuscommunity/postgres-exporter:v0.15.0}
@@ -222,3 +245,4 @@ volumes:
   minio_data:
   n8n_data:
   prometheus_data:
+  grafana_data:

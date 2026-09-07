@@ -37,7 +37,7 @@ Use `.env` for local runtime secrets and `.env.example` for placeholders. Do not
 ## Prometheus
 
 `docker-compose.yml` includes an observability profile with Prometheus,
-Postgres exporter, and Redis exporter. Prometheus scrapes the API at
+Grafana, Postgres exporter, and Redis exporter. Prometheus scrapes the API at
 `host.docker.internal:8000`, the worker at `worker:9108`, n8n at `n8n:5678`,
 and the exporter services through the compose network. Worker metrics are
 enabled by `WORKER_METRICS_ENABLED=true` in the compose environment and remain
@@ -55,6 +55,26 @@ docker compose --profile worker --profile observability config --quiet
 ```
 
 Container metrics are optional and use the `container-observability` profile.
+
+## Grafana
+
+Grafana runs in the observability profile and provisions Prometheus plus the
+RAG dashboards from source-controlled files under `infra/grafana/`. Start it
+with:
+
+```powershell
+docker compose --profile worker --profile observability up
+```
+
+Open `http://localhost:${GRAFANA_PORT:-3000}`. The `.env.example` admin
+password is a local placeholder; set a real `GRAFANA_ADMIN_PASSWORD` in `.env`
+or secret-backed production environment before starting Grafana.
+
+Validate the dashboard contract with:
+
+```powershell
+uv run python scripts/validate-grafana-dashboards.py
+```
 
 ## Non-Goals
 

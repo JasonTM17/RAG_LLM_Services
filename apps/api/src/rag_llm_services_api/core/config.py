@@ -111,6 +111,7 @@ KNOWN_ENV_VARS = frozenset(
         "N8N_WEBHOOK_URL",
         "N8N_METRICS",
         "N8N_METRICS_INCLUDE_DEFAULT_METRICS",
+        "N8N_METRICS_INCLUDE_QUEUE_METRICS",
         "N8N_API_KEY",
         "N8N_ENCRYPTION_KEY",
         "N8N_NOTIFICATION_WEBHOOK_URL",
@@ -132,6 +133,8 @@ KNOWN_ENV_VARS = frozenset(
         "REDIS_EXPORTER_PORT",
         "CADVISOR_IMAGE",
         "CADVISOR_PORT",
+        "GRAFANA_IMAGE",
+        "GRAFANA_PORT",
         "GRAFANA_BASE_URL",
         "GRAFANA_ADMIN_USER",
         "GRAFANA_ADMIN_PASSWORD",
@@ -449,6 +452,9 @@ class N8nSettings(BaseSettings):
     metrics_include_default_metrics: bool = Field(
         True, validation_alias="N8N_METRICS_INCLUDE_DEFAULT_METRICS"
     )
+    metrics_include_queue_metrics: bool = Field(
+        True, validation_alias="N8N_METRICS_INCLUDE_QUEUE_METRICS"
+    )
     api_key: str = Field("replace-with-local-n8n-api-key", validation_alias="N8N_API_KEY")
     encryption_key: str = Field(
         "replace-with-local-n8n-encryption-key", validation_alias="N8N_ENCRYPTION_KEY"
@@ -506,6 +512,8 @@ class ObservabilitySettings(BaseSettings):
         "gcr.io/cadvisor/cadvisor:v0.49.1", validation_alias="CADVISOR_IMAGE"
     )
     cadvisor_port: int = Field(8080, ge=1, le=65535, validation_alias="CADVISOR_PORT")
+    grafana_image: str = Field("grafana/grafana:13.2.1", validation_alias="GRAFANA_IMAGE")
+    grafana_port: int = Field(3000, ge=1, le=65535, validation_alias="GRAFANA_PORT")
     grafana_base_url: str = Field("http://grafana:3000", validation_alias="GRAFANA_BASE_URL")
     grafana_admin_user: str = Field("admin", validation_alias="GRAFANA_ADMIN_USER")
     grafana_admin_password: str = Field(

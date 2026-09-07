@@ -1,7 +1,9 @@
 # Metrics and Observability
 
 Phase 10 adds Prometheus-compatible metrics for the API, worker, RAG pipeline,
-LLM calls, ingestion, cache counters, and backing services.
+LLM calls, ingestion, cache counters, and backing services. Phase 11 adds
+source-controlled Grafana provisioning so local dashboards load without manual
+imports.
 
 ## Endpoints
 
@@ -68,6 +70,7 @@ docker compose --profile worker --profile observability up
 The observability profile includes:
 
 - `prometheus`
+- `grafana`
 - `postgres-exporter`
 - `redis-exporter`
 
@@ -89,14 +92,45 @@ Prometheus reads `infra/prometheus/prometheus.yml` and
 on the host at `localhost:8000`, which Prometheus reaches as
 `host.docker.internal:8000`.
 
+Grafana reads:
+
+- `infra/grafana/provisioning/datasources/prometheus.yml`
+- `infra/grafana/provisioning/dashboards/rag.yml`
+- `infra/grafana/dashboards/*.json`
+
+Local Grafana runs at `http://localhost:${GRAFANA_PORT:-3000}`. The default
+login is `GRAFANA_ADMIN_USER=admin` and
+`GRAFANA_ADMIN_PASSWORD=replace-with-local-grafana-password`; change the
+password in local `.env` before starting Grafana. Production must override the
+admin password through secret-backed environment configuration and must never
+commit the real value.
+
+The provisioned dashboards are:
+
+- RAG System Overview
+- Retrieval Performance
+- LLM / DeepSeek
+- Ingestion
+- Infrastructure
+- n8n
+
+The n8n dashboard uses aggregate workflow and queue metrics only. Keep
+`N8N_METRICS=true`, `N8N_METRICS_INCLUDE_DEFAULT_METRICS=true`, and
+`N8N_METRICS_INCLUDE_QUEUE_METRICS=true` for the compose dashboard contract.
+
 ## Verification
 
 Run:
 
 ```powershell
 uv run python scripts/validate-prometheus-config.py
+uv run python scripts/validate-grafana-dashboards.py
 .\scripts\verify-phase-10.ps1
+.\scripts\verify-phase-11.ps1
 ```
 
-The phase verifier checks metric labels, `/metrics`, log redaction, Prometheus
-config, compose config, lint, typecheck, tests, secret scan, and diff hygiene.
+The Phase 10 verifier checks metric labels, `/metrics`, log redaction,
+Prometheus config, compose config, lint, typecheck, tests, secret scan, and
+diff hygiene. The Phase 11 verifier additionally checks Grafana provisioning,
+dashboard JSON, required panel titles, datasource UID usage, no real Grafana
+admin password, compose config, and the same lint/type/test hygiene gates.

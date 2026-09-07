@@ -72,6 +72,7 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.n8n.webhook_url == "http://localhost:5678/"
     assert settings.n8n.metrics is True
     assert settings.n8n.metrics_include_default_metrics is True
+    assert settings.n8n.metrics_include_queue_metrics is True
     assert settings.n8n.notification_webhook_url is None
     assert settings.n8n.generic_timezone == "Asia/Bangkok"
     assert settings.n8n.rag_api_base_url == "http://host.docker.internal:8000/api/v1"
@@ -91,6 +92,8 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.observability.redis_exporter_port == 9121
     assert settings.observability.cadvisor_image == "gcr.io/cadvisor/cadvisor:v0.49.1"
     assert settings.observability.cadvisor_port == 8080
+    assert settings.observability.grafana_image == "grafana/grafana:13.2.1"
+    assert settings.observability.grafana_port == 3000
 
 
 def test_retrieval_defaults_are_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
