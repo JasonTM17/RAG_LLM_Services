@@ -84,6 +84,13 @@ KNOWN_ENV_VARS = frozenset(
         "RERANKER_PROVIDER",
         "RERANKER_MODEL",
         "OPENAI_TRACING_DISABLED",
+        "AGENT_TOOL_MAX_RESULTS",
+        "AGENT_TOOL_MAX_CONTEXT_CHUNKS",
+        "AGENT_TOOL_MAX_CHUNK_CHARS",
+        "AGENT_TOOL_MAX_CONTEXT_CHARS",
+        "AGENT_TOOL_MAX_DOCUMENTS",
+        "AGENT_HISTORY_MAX_MESSAGES",
+        "AGENT_HISTORY_MAX_CHARS",
         "N8N_BASE_URL",
         "N8N_API_KEY",
         "N8N_ENCRYPTION_KEY",
@@ -322,6 +329,21 @@ class OpenaiAgentsSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     tracing_disabled: bool = Field(True, validation_alias="OPENAI_TRACING_DISABLED")
+    tool_max_results: int = Field(5, ge=1, le=20, validation_alias="AGENT_TOOL_MAX_RESULTS")
+    tool_max_context_chunks: int = Field(
+        5, ge=1, le=20, validation_alias="AGENT_TOOL_MAX_CONTEXT_CHUNKS"
+    )
+    tool_max_chunk_chars: int = Field(
+        1200, ge=200, le=4000, validation_alias="AGENT_TOOL_MAX_CHUNK_CHARS"
+    )
+    tool_max_context_chars: int = Field(
+        6000, ge=1000, le=24000, validation_alias="AGENT_TOOL_MAX_CONTEXT_CHARS"
+    )
+    tool_max_documents: int = Field(20, ge=1, le=100, validation_alias="AGENT_TOOL_MAX_DOCUMENTS")
+    history_max_messages: int = Field(8, ge=1, le=50, validation_alias="AGENT_HISTORY_MAX_MESSAGES")
+    history_max_chars: int = Field(
+        12000, ge=1000, le=50000, validation_alias="AGENT_HISTORY_MAX_CHARS"
+    )
 
 
 class N8nSettings(BaseSettings):

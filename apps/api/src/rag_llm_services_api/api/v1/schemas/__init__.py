@@ -25,6 +25,18 @@ from rag_llm_services_api.api.v1.schemas.retrieval import (
     RetrievalSearchRequest,
     RetrievalSearchResponse,
 )
+from rag_llm_services_api.api.v1.schemas.study import (
+    FlashcardRequest,
+    FlashcardResponse,
+    FlashcardSetResponse,
+    LearningPlanDayResponse,
+    LearningPlanRequest,
+    LearningPlanResponse,
+    QuizQuestionResponse,
+    QuizRequest,
+    QuizResponse,
+    StudyBaseRequest,
+)
 
 __all__ = [
     "ChatRequest",
@@ -35,13 +47,23 @@ __all__ = [
     "DocumentResponse",
     "DocumentUploadResponse",
     "DocumentVersionResponse",
+    "FlashcardRequest",
+    "FlashcardResponse",
+    "FlashcardSetResponse",
     "IngestionJobResponse",
     "KnowledgeBaseCreate",
     "KnowledgeBaseResponse",
     "KnowledgeBaseUpdate",
     "LLMUsageResponse",
+    "LearningPlanDayResponse",
+    "LearningPlanRequest",
+    "LearningPlanResponse",
+    "QuizQuestionResponse",
+    "QuizRequest",
+    "QuizResponse",
     "RetrievalChunkResponse",
     "RetrievalFilterSchema",
     "RetrievalSearchRequest",
     "RetrievalSearchResponse",
+    "StudyBaseRequest",
 ]

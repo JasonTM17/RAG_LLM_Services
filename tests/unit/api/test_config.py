@@ -51,6 +51,13 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.rag.rrf_k == 60
     assert settings.rag.rrf_vector_weight == 1.0
     assert settings.rag.rrf_keyword_weight == 1.0
+    assert settings.agents.tool_max_results == 5
+    assert settings.agents.tool_max_context_chunks == 5
+    assert settings.agents.tool_max_chunk_chars == 1200
+    assert settings.agents.tool_max_context_chars == 6000
+    assert settings.agents.tool_max_documents == 20
+    assert settings.agents.history_max_messages == 8
+    assert settings.agents.history_max_chars == 12000
 
 
 def test_retrieval_defaults_are_configurable(monkeypatch: pytest.MonkeyPatch) -> None:

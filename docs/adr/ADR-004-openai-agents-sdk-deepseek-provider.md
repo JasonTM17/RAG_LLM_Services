@@ -10,7 +10,7 @@ The platform needs agent workflows without depending on OpenAI Agent Builder UI.
 
 ## Decision
 
-Use OpenAI Agents SDK in application code with a custom OpenAI-compatible DeepSeek client/provider behind the internal LLM gateway. Prefer Responses API mode at `https://api.deepseek.com` with model `deepseek-v4-flash`.
+Use OpenAI Agents SDK in application code with a custom OpenAI-compatible DeepSeek client/provider behind the internal LLM gateway. Prefer Responses API mode at `https://api.deepseek.com` with model `deepseek-v4-flash`. Agent tools are server-scoped wrappers over application services; the model never supplies `owner_id` or talks to repositories directly.
 
 ## Consequences
 
@@ -20,6 +20,8 @@ Use OpenAI Agents SDK in application code with a custom OpenAI-compatible DeepSe
 - Chat Completions fallback is disabled by default and must log a safe fallback reason when explicitly enabled.
 - Provider-side continuation is not assumed; conversation state is stored locally.
 - Live DeepSeek tests remain opt-in and use synthetic public prompts.
+- Agent tool outputs are count- and size-bounded before entering model context.
+- Retrieved document text is always marked as untrusted source data and cannot override system/developer instructions.
 
 ## Alternatives Considered
 

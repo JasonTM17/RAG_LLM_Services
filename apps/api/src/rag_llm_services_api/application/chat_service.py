@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID
 
+from rag_llm_services_agents.citations import (
+    CitationValidationError,
+    CitationValidator,
+)
 from rag_llm_services_api.application.retrieval_service import RetrievalService
-from rag_llm_services_api.core.errors import NotFoundError
+from rag_llm_services_api.core.errors import NotFoundError, ValidationError
 from rag_llm_services_api.db.models.conversation import MessageModel
 from rag_llm_services_api.domain.chat import DEFAULT_CHAT_HISTORY_LIMIT, ChatMessageRole
 from rag_llm_services_api.infrastructure.repositories.chat import ChatRepository
@@ -23,8 +26,6 @@ from rag_llm_services_llm.base import (
 )
 from rag_llm_services_llm.usage import LLMUsage
 from rag_llm_services_rag.retrieval.types import CitedChunk, ContextBundle, RetrievalFilter
-
-_CITATION_PATTERN = re.compile(r"\[S\d+\]")
 
 _SYSTEM_PROMPT = """You answer learning questions using only the provided source context.
 If the sources do not contain enough evidence, say so briefly.
@@ -58,16 +59,6 @@ class ChatStreamChunk:
     usage: LLMUsage | None = None
     error_code: str | None = None
     error_message: str | None = None
-
-
-class CitationValidator:
-    """Select cited chunks referenced by bracketed source IDs."""
-
-    def cited_chunks(self, answer: str, context_bundle: ContextBundle | None) -> list[CitedChunk]:
-        if context_bundle is None:
-            return []
-        source_ids = set(_CITATION_PATTERN.findall(answer))
-        return [chunk for chunk in context_bundle.cited_chunks if chunk.source_id in source_ids]
 
 
 class CitationPromptBuilder:
@@ -159,7 +150,7 @@ class ChatApplicationService:
             conversation_id=conversation_id,
             message_id=assistant_message.id,
             answer=llm_response.content,
-            citations=self._citation_validator.cited_chunks(llm_response.content, context_bundle),
+            citations=self._cited_chunks_or_raise(llm_response.content, context_bundle),
             retrieved_sources=context_bundle.cited_chunks if context_bundle else [],
             usage=llm_response.usage,
             provider=llm_response.provider,
@@ -296,6 +287,7 @@ class ChatApplicationService:
         response: LLMResponse,
         context_bundle: ContextBundle | None,
     ) -> MessageModel:
+        self._cited_chunks_or_raise(response.content, context_bundle)
         source_ids = (
             [chunk.source_id for chunk in context_bundle.cited_chunks] if context_bundle else []
         )
@@ -321,6 +313,20 @@ class ChatApplicationService:
             retry_count=response.retry_count,
         )
         return assistant_message
+
+    def _cited_chunks_or_raise(
+        self,
+        answer: str,
+        context_bundle: ContextBundle | None,
+    ) -> list[CitedChunk]:
+        try:
+            return self._citation_validator.cited_chunks(answer, context_bundle)
+        except CitationValidationError as exc:
+            raise ValidationError(
+                "Assistant response contains invalid citations",
+                code="INVALID_CITATION",
+                status_code=422,
+            ) from exc
 
 
 def _response_with_content(response: LLMResponse, content: str) -> LLMResponse:

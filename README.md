@@ -6,7 +6,7 @@ The target system lets a user upload learning documents, build owner-scoped know
 
 ## Current Status
 
-This repository has completed Phases 01-06: repository contract, backend foundation, document management/storage, RAG ingestion/embeddings, hybrid retrieval/reranking, and the DeepSeek-compatible LLM/chat gateway. The FastAPI app now supports typed settings, structured redacting JSON logs, request IDs, standard error envelopes, async SQLAlchemy/Alembic, health endpoints, owner-scoped knowledge bases/documents, upload/download/delete APIs, parser/chunking/embedding ingestion, `POST /api/v1/retrieval/search`, `POST /api/v1/chat`, and `POST /api/v1/chat/stream`. Agent workflows, async worker, frontend, full Prometheus `/metrics`, CI, deployment, live DeepSeek proof, and acceptance-demo behavior are intentionally not implemented yet.
+This repository has completed Phases 01-07: repository contract, backend foundation, document management/storage, RAG ingestion/embeddings, hybrid retrieval/reranking, the DeepSeek-compatible LLM/chat gateway, and the agent-backed study workflow layer. The FastAPI app now supports typed settings, structured redacting JSON logs, request IDs, standard error envelopes, async SQLAlchemy/Alembic, health endpoints, owner-scoped knowledge bases/documents, upload/download/delete APIs, parser/chunking/embedding ingestion, `POST /api/v1/retrieval/search`, `POST /api/v1/chat`, `POST /api/v1/chat/stream`, `POST /api/v1/study/quiz`, `POST /api/v1/study/flashcards`, and `POST /api/v1/study/learning-plan`. Async worker, frontend, full Prometheus `/metrics`, CI, deployment, live DeepSeek proof, and acceptance-demo behavior are intentionally not implemented yet.
 
 ## Architecture
 
@@ -15,10 +15,9 @@ The planned runtime is a Docker Compose modular monolith plus worker:
 - `apps/api`: FastAPI presentation and application services.
 - `apps/worker`: ingestion, embedding, evaluation, and maintenance jobs.
 - `apps/web`: Next.js React TypeScript frontend.
-- `packages/rag`: retrieval, chunking, context building, citation validation.
-- `packages/llm`: provider-neutral LLM gateway, DeepSeek adapter, usage, and cost estimates.
+- `packages/rag`: retrieval, chunking, and context building.
 - `packages/llm`: internal model gateway and DeepSeek provider adapter.
-- `packages/agents`: OpenAI Agents SDK orchestration with bounded tools.
+- `packages/agents`: OpenAI Agents SDK orchestration, bounded tools, agent prompts, study outputs, context windows, and citation validation.
 - `infra`: Docker, Prometheus, Grafana, and n8n provisioning.
 
 More detail:
@@ -30,7 +29,7 @@ More detail:
 
 ## Runtime Defaults
 
-- Python: `3.13` through `uv` (uv workspace members: `apps/api`, `packages/shared`, `packages/observability`, `packages/rag`, `packages/embeddings`, `packages/llm`).
+- Python: `3.13` through `uv` (uv workspace members: `apps/api`, `packages/shared`, `packages/observability`, `packages/rag`, `packages/embeddings`, `packages/llm`, `packages/agents`).
 - Node: `24.12.0` with `pnpm`.
 - Local/test LLM provider: `LLM_PROVIDER=fake` so default checks never make paid API calls.
 - DeepSeek OpenAI-compatible base URL: `https://api.deepseek.com`.
@@ -53,6 +52,7 @@ Phase checks:
 .\scripts\verify-phase-04.ps1
 .\scripts\verify-phase-05.ps1
 .\scripts\verify-phase-06.ps1
+.\scripts\verify-phase-07.ps1
 ```
 
 The Makefile mirrors the same contract for environments with `make`:
@@ -66,13 +66,14 @@ make verify-phase-03
 make verify-phase-04
 make verify-phase-05
 make verify-phase-06
+make verify-phase-07
 make api-test      # uv run pytest -q
 make api-lint      # ruff check + format check
 make api-migrate   # alembic upgrade head (needs a configured Postgres)
 make api-run       # uvicorn with reload on :8000
 ```
 
-Health endpoints once the API is running: `GET /health/live` (process-only) and `GET /health/ready` (bounded Postgres/Redis/MinIO probes). Retrieval search is available at `POST /api/v1/retrieval/search` after documents have been indexed; mocked chat is available through `POST /api/v1/chat` and semantic SSE through `POST /api/v1/chat/stream`. Future phases will add runnable worker, web, agents, Prometheus scrape endpoint, backup, restore, and acceptance-demo targets.
+Health endpoints once the API is running: `GET /health/live` (process-only) and `GET /health/ready` (bounded Postgres/Redis/MinIO probes). Retrieval search is available at `POST /api/v1/retrieval/search` after documents have been indexed; mocked chat is available through `POST /api/v1/chat` and semantic SSE through `POST /api/v1/chat/stream`. Agent-backed study generation is available through `POST /api/v1/study/quiz`, `POST /api/v1/study/flashcards`, and `POST /api/v1/study/learning-plan`. Future phases will add runnable worker, web, Prometheus scrape endpoint, backup, restore, and acceptance-demo targets.
 
 ## Plan Authority
 

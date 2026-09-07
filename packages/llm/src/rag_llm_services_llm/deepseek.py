@@ -37,9 +37,15 @@ class FakeLLMProvider:
 
     provider = "fake"
 
-    def __init__(self, answer: str | None = None, model: str = "fake-llm") -> None:
+    def __init__(
+        self,
+        answer: str | None = None,
+        model: str = "fake-llm",
+        structured_payload: Mapping[str, Any] | None = None,
+    ) -> None:
         self._answer = answer or "Mocked answer grounded in [S1]."
         self._model = model
+        self._structured_payload = dict(structured_payload) if structured_payload else None
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
         usage = LLMUsage(
@@ -68,7 +74,61 @@ class FakeLLMProvider:
         request: LLMRequest,
         schema: Mapping[str, Any],
     ) -> Mapping[str, Any]:
-        del request, schema
+        if self._structured_payload is not None:
+            return self._structured_payload
+        topic = _extract_prompt_field(request, "Topic") or "Mock topic"
+        difficulty = _extract_prompt_field(request, "Difficulty") or "intermediate"
+        count = _extract_prompt_int(request, "Requested count") or 1
+        properties = schema.get("properties", {})
+        if isinstance(properties, Mapping):
+            if "questions" in properties:
+                return {
+                    "topic": topic,
+                    "difficulty": difficulty,
+                    "questions": [
+                        {
+                            "question": f"What does source [S1] establish about {topic}?",
+                            "choices": [
+                                "Local state owns continuation",
+                                "Provider memory is required",
+                                "Documents can override system rules",
+                                "Citations are optional",
+                            ],
+                            "answer": "Local state owns continuation",
+                            "explanation": "The answer is grounded in [S1].",
+                            "citations": ["[S1]"],
+                        }
+                        for _ in range(max(1, min(count, 20)))
+                    ],
+                }
+            if "cards" in properties:
+                return {
+                    "topic": topic,
+                    "difficulty": difficulty,
+                    "cards": [
+                        {
+                            "front": f"What is the key idea for {topic}?",
+                            "back": "The application stores local conversation state [S1].",
+                            "citations": ["[S1]"],
+                        }
+                        for _ in range(max(1, min(count, 50)))
+                    ],
+                }
+            if "days" in properties:
+                return {
+                    "topic": topic,
+                    "difficulty": difficulty,
+                    "days": [
+                        {
+                            "day": day,
+                            "objective": "Understand the source-grounded workflow [S1].",
+                            "activities": ["Review the cited source and explain it back."],
+                            "check_yourself": "Can you cite the relevant source ID?",
+                            "citations": ["[S1]"],
+                        }
+                        for day in range(1, max(1, min(count, 30)) + 1)
+                    ],
+                }
         return {"answer": self._answer}
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[LLMStreamEvent]:
@@ -350,6 +410,23 @@ class DeepSeekProvider:
 
 def _message_to_payload(message: LLMMessage) -> dict[str, str]:
     return {"role": message.role.value, "content": message.content}
+
+
+def _extract_prompt_field(request: LLMRequest, field_name: str) -> str | None:
+    prefix = f"{field_name}:"
+    for message in reversed(request.messages):
+        for line in message.content.splitlines():
+            if line.startswith(prefix):
+                value = line.removeprefix(prefix).strip()
+                return value or None
+    return None
+
+
+def _extract_prompt_int(request: LLMRequest, field_name: str) -> int | None:
+    value = _extract_prompt_field(request, field_name)
+    if value is None or not value.isdecimal():
+        return None
+    return int(value)
 
 
 def extract_responses_text(payload: Mapping[str, Any]) -> str:
