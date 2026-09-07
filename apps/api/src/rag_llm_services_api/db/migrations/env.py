@@ -13,6 +13,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import rag_llm_services_api.db.models  # noqa: F401 - registers models on Base.metadata
 from rag_llm_services_api.core.config import get_settings
 from rag_llm_services_api.db.base import Base
 

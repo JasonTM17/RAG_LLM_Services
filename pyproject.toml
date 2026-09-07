@@ -13,7 +13,8 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-asyncio>=1", "ruff>=0.13", "mypy>=1.18"]
+dev = ["pytest>=8", "pytest-asyncio>=1", "ruff>=0.13", "mypy>=1.18", "aiosqlite>=0.20"]
+
 
 [tool.uv.workspace]
 members = ["apps/api", "packages/shared", "packages/observability"]

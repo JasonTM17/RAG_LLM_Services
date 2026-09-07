@@ -61,3 +61,24 @@ class UpstreamUnavailableError(AppError):
 
     default_code = "UPSTREAM_UNAVAILABLE"
     default_status = 503
+
+
+class ConflictError(AppError):
+    """Requested operation conflicts with current state."""
+
+    default_code = "CONFLICT"
+    default_status = 409
+
+
+class PayloadTooLargeError(AppError):
+    """Uploaded content exceeds maximum size limits."""
+
+    default_code = "PAYLOAD_TOO_LARGE"
+    default_status = 413
+
+
+class UnsupportedMediaTypeError(AppError):
+    """Payload format or MIME type is not supported."""
+
+    default_code = "UNSUPPORTED_MEDIA_TYPE"
+    default_status = 415

@@ -9,4 +9,11 @@ chat Phase 06/07, study Phase 07).
 
 from fastapi import APIRouter
 
+from rag_llm_services_api.api.v1.documents import router as documents_router
+from rag_llm_services_api.api.v1.ingestion_jobs import router as ingestion_jobs_router
+from rag_llm_services_api.api.v1.knowledge_bases import router as knowledge_bases_router
+
 router = APIRouter()
+router.include_router(knowledge_bases_router)
+router.include_router(documents_router)
+router.include_router(ingestion_jobs_router)
