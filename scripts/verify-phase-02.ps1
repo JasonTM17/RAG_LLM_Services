@@ -73,6 +73,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "ruff format check failed"
 }
 
+uv run mypy apps/api/src packages
+if ($LASTEXITCODE -ne 0) {
+    throw "mypy failed"
+}
+
 uv run pytest -q
 if ($LASTEXITCODE -ne 0) {
     throw "pytest failed"

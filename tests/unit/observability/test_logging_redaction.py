@@ -229,3 +229,45 @@ def test_known_secret_containing_json_escaped_chars_is_replaced() -> None:
     )
     assert tricky_secret not in formatted
     assert REDACTED in formatted
+
+
+def test_reserved_payload_keys_are_protected_from_caller_extra() -> None:
+    """Caller extra cannot clobber envelope metadata keys."""
+    record = _record(
+        "legitimate message",
+        timestamp="fake-timestamp",
+        level="FAKE_LEVEL",
+        logger="fake.logger",
+        message="fake message clobber",
+        service="fake-service",
+        env="fake-env",
+        request_id="fake-request-id",
+        exception={"fake": "exception"},
+        legit_extra="preserved-value",
+    )
+    payload = _format(record)
+    assert payload["service"] == "rag-llm-services-api"
+    assert payload["env"] == "test"
+    assert payload["level"] == "INFO"
+    assert payload["logger"] == "tests.observability"
+    assert payload["message"] == "legitimate message"
+    assert payload["timestamp"] != "fake-timestamp"
+    assert payload["timestamp"].endswith("Z")
+    assert payload["request_id"] is None  # not set via ContextVar
+    assert "exception" not in payload  # record had no exc_info
+    assert payload["legit_extra"] == "preserved-value"
+
+
+def test_short_and_empty_known_secrets_do_not_cause_over_redaction() -> None:
+    """Short (< 6 chars) or empty secret strings must not scrub benign output."""
+    record = _record("user test_id 12345 processed in test environment")
+    payload = _format(
+        record,
+        known_secrets=("", "1", "12", "123", "1234", "12345", "real-super-secret"),
+    )
+    # The short values should NOT be redacted wholesale in message or other fields.
+    assert "12345" in str(payload["message"])
+    assert "test" in str(payload["message"])
+    # And empty string must not insert REDACTED between every character.
+    assert payload["service"] == "rag-llm-services-api"
+    assert payload["env"] == "test"

@@ -64,6 +64,7 @@ def test_production_with_dev_auth_enabled_fails_closed(
     monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://u:{real}@db:5432/d")
     monkeypatch.setenv("DEEPSEEK_API_KEY", real)
     monkeypatch.setenv("POSTGRES_PASSWORD", real)
+    monkeypatch.setenv("MINIO_ACCESS_KEY", real)
     monkeypatch.setenv("MINIO_SECRET_KEY", real)
     monkeypatch.setenv("N8N_API_KEY", real)
     monkeypatch.setenv("N8N_ENCRYPTION_KEY", real)
@@ -82,6 +83,7 @@ def test_production_with_complete_config_constructs(
     monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://u:{real}@db:5432/d")
     monkeypatch.setenv("DEEPSEEK_API_KEY", real)
     monkeypatch.setenv("POSTGRES_PASSWORD", real)
+    monkeypatch.setenv("MINIO_ACCESS_KEY", real)
     monkeypatch.setenv("MINIO_SECRET_KEY", real)
     monkeypatch.setenv("N8N_API_KEY", real)
     monkeypatch.setenv("N8N_ENCRYPTION_KEY", real)
@@ -143,6 +145,7 @@ def test_production_guard_covers_every_required_var(
         "DATABASE_URL": f"postgresql+psycopg://u:{real}@db:5432/d",
         "DEEPSEEK_API_KEY": real,
         "POSTGRES_PASSWORD": real,
+        "MINIO_ACCESS_KEY": real,
         "MINIO_SECRET_KEY": real,
         "N8N_API_KEY": real,
         "N8N_ENCRYPTION_KEY": real,

@@ -35,6 +35,7 @@ def build_engine(settings: Settings) -> AsyncEngine:
         pool_pre_ping=True,
         pool_size=5,
         max_overflow=10,
+        connect_args={"connect_timeout": 2},
     )
 
 

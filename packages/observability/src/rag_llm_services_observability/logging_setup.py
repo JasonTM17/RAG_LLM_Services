@@ -76,6 +76,21 @@ _STANDARD_LOGRECORD_ATTRS = frozenset(
         "taskName",
         "message",
         "asctime",
+        "_context_request_id",
+    }
+)
+
+# Core payload keys that must never be clobbered by caller extra.
+_RESERVED_PAYLOAD_KEYS = frozenset(
+    {
+        "timestamp",
+        "level",
+        "logger",
+        "message",
+        "service",
+        "env",
+        "request_id",
+        "exception",
     }
 )
 
@@ -120,7 +135,9 @@ class RequestContextFilter(logging.Filter):
     """Inject the current request ID onto every record."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.request_id = get_request_id()
+        cid = get_request_id()
+        record._context_request_id = cid
+        record.request_id = cid
         return True
 
 
@@ -137,11 +154,13 @@ class JsonFormatter(logging.Formatter):
         super().__init__()
         self.service = service
         self.env = env
-        self.known_secrets = tuple(secret for secret in known_secrets if secret)
+        self.known_secrets = tuple(
+            secret for secret in known_secrets if secret and len(secret) >= 6
+        )
 
     def format(self, record: logging.LogRecord) -> str:
-        if "request_id" in record.__dict__:
-            request_id = record.__dict__["request_id"]
+        if hasattr(record, "_context_request_id"):
+            request_id = record._context_request_id
         else:
             request_id = get_request_id()
 
@@ -155,11 +174,12 @@ class JsonFormatter(logging.Formatter):
             "request_id": request_id,
         }
 
-        # request_id is emitted above; skip it here so it never appears twice.
+        # Reserved core keys are emitted explicitly; skip them from extra so
+        # caller extras cannot clobber envelope metadata.
         extra = {
             key: value
             for key, value in record.__dict__.items()
-            if key not in _STANDARD_LOGRECORD_ATTRS and key != "request_id"
+            if key not in _STANDARD_LOGRECORD_ATTRS and key not in _RESERVED_PAYLOAD_KEYS
         }
         payload.update(redact_extra(extra))
 
@@ -197,9 +217,11 @@ class JsonFormatter(logging.Formatter):
         """
         masked = _DB_URL_CREDENTIAL_PATTERN.sub("://[REDACTED]@", serialized)
         for secret in self.known_secrets:
+            if not secret or len(secret) < 6:
+                continue
             masked = masked.replace(secret, REDACTED)
             escaped = json.dumps(secret)[1:-1]
-            if escaped != secret:
+            if escaped != secret and len(escaped) >= 6:
                 masked = masked.replace(escaped, REDACTED)
         return _SECRET_VALUE_PATTERN.sub(REDACTED, masked)
 

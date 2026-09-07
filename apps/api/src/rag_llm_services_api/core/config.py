@@ -13,6 +13,7 @@ Contract notes:
   values, URLs, or placeholder material.
 """
 
+from collections.abc import Callable
 from functools import lru_cache
 from typing import Annotated
 from uuid import UUID
@@ -28,6 +29,7 @@ PRODUCTION_REQUIRED_SECRET_VARS = (
     "DATABASE_URL",
     "DEEPSEEK_API_KEY",
     "POSTGRES_PASSWORD",
+    "MINIO_ACCESS_KEY",
     "MINIO_SECRET_KEY",
     "N8N_API_KEY",
     "N8N_ENCRYPTION_KEY",
@@ -83,8 +85,20 @@ KNOWN_ENV_VARS = frozenset(
 )
 
 
-def _alias(name: str) -> dict:
-    return {"validation_alias": name}
+def _settings_factory[SettingsModelT: BaseSettings](
+    settings_type: type[SettingsModelT],
+) -> Callable[[], SettingsModelT]:
+    """Build a default factory for Pydantic settings models.
+
+    BaseSettings constructors are intentionally dynamic: defaults and env
+    aliases are resolved at runtime. Mypy cannot model that constructor shape
+    without a plugin, so this helper keeps the dynamic boundary in one place.
+    """
+
+    def factory() -> SettingsModelT:
+        return settings_type()  # type: ignore[call-arg]
+
+    return factory
 
 
 class AppSettings(BaseSettings):
@@ -92,14 +106,14 @@ class AppSettings(BaseSettings):
 
     model_config = SettingsConfigDict(extra="ignore")
 
-    env: str = Field("local", **_alias("APP_ENV"))
-    log_level: str = Field("INFO", **_alias("LOG_LEVEL"))
-    api_host: str = Field("0.0.0.0", **_alias("API_HOST"))
-    api_port: int = Field(8000, **_alias("API_PORT"))
+    env: str = Field("local", validation_alias="APP_ENV")
+    log_level: str = Field("INFO", validation_alias="LOG_LEVEL")
+    api_host: str = Field("0.0.0.0", validation_alias="API_HOST")
+    api_port: int = Field(8000, validation_alias="API_PORT")
     # NoDecode: CORS_ORIGINS is a comma-separated string, not JSON; the
     # validator below performs the split.
     cors_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["http://localhost:3000"], **_alias("CORS_ORIGINS")
+        default_factory=lambda: ["http://localhost:3000"], validation_alias="CORS_ORIGINS"
     )
 
     @field_validator("env")
@@ -132,16 +146,16 @@ class DevAuthSettings(BaseSettings):
 
     model_config = SettingsConfigDict(extra="ignore")
 
-    auth_enabled: bool = Field(False, **_alias("RAG_DEV_AUTH_ENABLED"))
-    user_id: UUID | None = Field(None, **_alias("RAG_DEV_USER_ID"))
+    auth_enabled: bool = Field(False, validation_alias="RAG_DEV_AUTH_ENABLED")
+    user_id: UUID | None = Field(None, validation_alias="RAG_DEV_USER_ID")
 
 
 class PostgresSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    db: str = Field("rag_llm_services", **_alias("POSTGRES_DB"))
-    user: str = Field("rag_app", **_alias("POSTGRES_USER"))
-    password: str = Field("replace-with-local-password", **_alias("POSTGRES_PASSWORD"))
+    db: str = Field("rag_llm_services", validation_alias="POSTGRES_DB")
+    user: str = Field("rag_app", validation_alias="POSTGRES_USER")
+    password: str = Field("replace-with-local-password", validation_alias="POSTGRES_PASSWORD")
 
 
 class DatabaseSettings(BaseSettings):
@@ -149,7 +163,7 @@ class DatabaseSettings(BaseSettings):
 
     url: str = Field(
         "postgresql+psycopg://rag_app:replace-with-local-password@postgres:5432/rag_llm_services",
-        **_alias("DATABASE_URL"),
+        validation_alias="DATABASE_URL",
     )
 
     @field_validator("url")
@@ -168,28 +182,30 @@ class DatabaseSettings(BaseSettings):
 class RedisSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    url: str = Field("redis://redis:6379/0", **_alias("REDIS_URL"))
+    url: str = Field("redis://redis:6379/0", validation_alias="REDIS_URL")
 
 
 class MinioSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    endpoint: str = Field("http://minio:9000", **_alias("MINIO_ENDPOINT"))
-    access_key: str = Field("rag-local", **_alias("MINIO_ACCESS_KEY"))
-    secret_key: str = Field("replace-with-local-minio-secret", **_alias("MINIO_SECRET_KEY"))
-    bucket: str = Field("rag-documents", **_alias("MINIO_BUCKET"))
+    endpoint: str = Field("http://minio:9000", validation_alias="MINIO_ENDPOINT")
+    access_key: str = Field(
+        "replace-with-local-minio-access-key", validation_alias="MINIO_ACCESS_KEY"
+    )
+    secret_key: str = Field("replace-with-local-minio-secret", validation_alias="MINIO_SECRET_KEY")
+    bucket: str = Field("rag-documents", validation_alias="MINIO_BUCKET")
 
 
 class LlmSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    provider: str = Field("deepseek", **_alias("LLM_PROVIDER"))
-    max_input_tokens: int = Field(12000, **_alias("LLM_MAX_INPUT_TOKENS"))
-    max_output_tokens: int = Field(2048, **_alias("LLM_MAX_OUTPUT_TOKENS"))
+    provider: str = Field("deepseek", validation_alias="LLM_PROVIDER")
+    max_input_tokens: int = Field(12000, validation_alias="LLM_MAX_INPUT_TOKENS")
+    max_output_tokens: int = Field(2048, validation_alias="LLM_MAX_OUTPUT_TOKENS")
     daily_estimated_cost_limit_usd: float = Field(
-        5.0, **_alias("LLM_DAILY_ESTIMATED_COST_LIMIT_USD")
+        5.0, validation_alias="LLM_DAILY_ESTIMATED_COST_LIMIT_USD"
     )
-    request_timeout_seconds: int = Field(60, **_alias("LLM_REQUEST_TIMEOUT_SECONDS"))
+    request_timeout_seconds: int = Field(60, validation_alias="LLM_REQUEST_TIMEOUT_SECONDS")
 
 
 class DeepseekSettings(BaseSettings):
@@ -197,14 +213,14 @@ class DeepseekSettings(BaseSettings):
 
     model_config = SettingsConfigDict(extra="ignore")
 
-    api_key: str = Field("replace-with-your-deepseek-api-key", **_alias("DEEPSEEK_API_KEY"))
-    base_url: str = Field("https://api.deepseek.com", **_alias("DEEPSEEK_BASE_URL"))
-    model: str = Field("deepseek-v4-flash", **_alias("DEEPSEEK_MODEL"))
-    api_mode: str = Field("responses", **_alias("DEEPSEEK_API_MODE"))
+    api_key: str = Field("replace-with-your-deepseek-api-key", validation_alias="DEEPSEEK_API_KEY")
+    base_url: str = Field("https://api.deepseek.com", validation_alias="DEEPSEEK_BASE_URL")
+    model: str = Field("deepseek-v4-flash", validation_alias="DEEPSEEK_MODEL")
+    api_mode: str = Field("responses", validation_alias="DEEPSEEK_API_MODE")
     allow_chat_completions_fallback: bool = Field(
-        False, **_alias("DEEPSEEK_ALLOW_CHAT_COMPLETIONS_FALLBACK")
+        False, validation_alias="DEEPSEEK_ALLOW_CHAT_COMPLETIONS_FALLBACK"
     )
-    run_live_tests: bool = Field(False, **_alias("RUN_DEEPSEEK_LIVE_TESTS"))
+    run_live_tests: bool = Field(False, validation_alias="RUN_DEEPSEEK_LIVE_TESTS")
 
     @field_validator("base_url")
     @classmethod
@@ -218,50 +234,52 @@ class DeepseekSettings(BaseSettings):
 class RagSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    context_token_budget: int = Field(6000, **_alias("RAG_CONTEXT_TOKEN_BUDGET"))
-    rerank_top_k: int = Field(8, **_alias("RAG_RERANK_TOP_K"))
+    context_token_budget: int = Field(6000, validation_alias="RAG_CONTEXT_TOKEN_BUDGET")
+    rerank_top_k: int = Field(8, validation_alias="RAG_RERANK_TOP_K")
 
 
 class EmbeddingSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    provider: str = Field("bge-m3", **_alias("EMBEDDING_PROVIDER"))
-    model: str = Field("BAAI/bge-m3", **_alias("EMBEDDING_MODEL"))
-    reranker_provider: str = Field("bge", **_alias("RERANKER_PROVIDER"))
-    reranker_model: str = Field("BAAI/bge-reranker-v2-m3", **_alias("RERANKER_MODEL"))
+    provider: str = Field("bge-m3", validation_alias="EMBEDDING_PROVIDER")
+    model: str = Field("BAAI/bge-m3", validation_alias="EMBEDDING_MODEL")
+    reranker_provider: str = Field("bge", validation_alias="RERANKER_PROVIDER")
+    reranker_model: str = Field("BAAI/bge-reranker-v2-m3", validation_alias="RERANKER_MODEL")
 
 
 class OpenaiAgentsSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    tracing_disabled: bool = Field(True, **_alias("OPENAI_TRACING_DISABLED"))
+    tracing_disabled: bool = Field(True, validation_alias="OPENAI_TRACING_DISABLED")
 
 
 class N8nSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    base_url: str = Field("http://n8n:5678", **_alias("N8N_BASE_URL"))
-    api_key: str = Field("replace-with-local-n8n-api-key", **_alias("N8N_API_KEY"))
+    base_url: str = Field("http://n8n:5678", validation_alias="N8N_BASE_URL")
+    api_key: str = Field("replace-with-local-n8n-api-key", validation_alias="N8N_API_KEY")
     encryption_key: str = Field(
-        "replace-with-local-n8n-encryption-key", **_alias("N8N_ENCRYPTION_KEY")
+        "replace-with-local-n8n-encryption-key", validation_alias="N8N_ENCRYPTION_KEY"
     )
 
 
 class ObservabilitySettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    prometheus_base_url: str = Field("http://prometheus:9090", **_alias("PROMETHEUS_BASE_URL"))
-    grafana_base_url: str = Field("http://grafana:3000", **_alias("GRAFANA_BASE_URL"))
-    grafana_admin_user: str = Field("admin", **_alias("GRAFANA_ADMIN_USER"))
+    prometheus_base_url: str = Field(
+        "http://prometheus:9090", validation_alias="PROMETHEUS_BASE_URL"
+    )
+    grafana_base_url: str = Field("http://grafana:3000", validation_alias="GRAFANA_BASE_URL")
+    grafana_admin_user: str = Field("admin", validation_alias="GRAFANA_ADMIN_USER")
     grafana_admin_password: str = Field(
-        "replace-with-local-grafana-password", **_alias("GRAFANA_ADMIN_PASSWORD")
+        "replace-with-local-grafana-password", validation_alias="GRAFANA_ADMIN_PASSWORD"
     )
 
 
 class FrontendSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    next_public_api_base_url: str | None = Field(None, **_alias("NEXT_PUBLIC_API_BASE_URL"))
+    next_public_api_base_url: str | None = Field(None, validation_alias="NEXT_PUBLIC_API_BASE_URL")
 
 
 class Settings(BaseSettings):
@@ -275,20 +293,22 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(extra="ignore")
 
-    app: AppSettings = Field(default_factory=AppSettings)
-    dev_auth: DevAuthSettings = Field(default_factory=DevAuthSettings)
-    postgres: PostgresSettings = Field(default_factory=PostgresSettings)
-    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
-    redis: RedisSettings = Field(default_factory=RedisSettings)
-    minio: MinioSettings = Field(default_factory=MinioSettings)
-    llm: LlmSettings = Field(default_factory=LlmSettings)
-    deepseek: DeepseekSettings = Field(default_factory=DeepseekSettings)
-    rag: RagSettings = Field(default_factory=RagSettings)
-    embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
-    agents: OpenaiAgentsSettings = Field(default_factory=OpenaiAgentsSettings)
-    n8n: N8nSettings = Field(default_factory=N8nSettings)
-    observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
-    frontend: FrontendSettings = Field(default_factory=FrontendSettings)
+    app: AppSettings = Field(default_factory=_settings_factory(AppSettings))
+    dev_auth: DevAuthSettings = Field(default_factory=_settings_factory(DevAuthSettings))
+    postgres: PostgresSettings = Field(default_factory=_settings_factory(PostgresSettings))
+    database: DatabaseSettings = Field(default_factory=_settings_factory(DatabaseSettings))
+    redis: RedisSettings = Field(default_factory=_settings_factory(RedisSettings))
+    minio: MinioSettings = Field(default_factory=_settings_factory(MinioSettings))
+    llm: LlmSettings = Field(default_factory=_settings_factory(LlmSettings))
+    deepseek: DeepseekSettings = Field(default_factory=_settings_factory(DeepseekSettings))
+    rag: RagSettings = Field(default_factory=_settings_factory(RagSettings))
+    embedding: EmbeddingSettings = Field(default_factory=_settings_factory(EmbeddingSettings))
+    agents: OpenaiAgentsSettings = Field(default_factory=_settings_factory(OpenaiAgentsSettings))
+    n8n: N8nSettings = Field(default_factory=_settings_factory(N8nSettings))
+    observability: ObservabilitySettings = Field(
+        default_factory=_settings_factory(ObservabilitySettings)
+    )
+    frontend: FrontendSettings = Field(default_factory=_settings_factory(FrontendSettings))
 
     @model_validator(mode="after")
     def _production_guard(self) -> "Settings":
@@ -299,6 +319,7 @@ class Settings(BaseSettings):
             "DATABASE_URL": self.database.url,
             "DEEPSEEK_API_KEY": self.deepseek.api_key,
             "POSTGRES_PASSWORD": self.postgres.password,
+            "MINIO_ACCESS_KEY": self.minio.access_key,
             "MINIO_SECRET_KEY": self.minio.secret_key,
             "N8N_API_KEY": self.n8n.api_key,
             "N8N_ENCRYPTION_KEY": self.n8n.encryption_key,

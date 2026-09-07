@@ -26,6 +26,7 @@ def _collect_known_secrets(settings: Settings) -> tuple[str, ...]:
 
     Placeholder values are skipped: they are not real credentials and
     redacting them would make log triage harder for no security gain.
+    Short (< 6 chars) or empty values are also skipped to prevent over-redaction.
     """
     candidates = (
         settings.postgres.password,
@@ -38,7 +39,9 @@ def _collect_known_secrets(settings: Settings) -> tuple[str, ...]:
     return tuple(
         value
         for value in candidates
-        if value and not any(marker in value.lower() for marker in PLACEHOLDER_MARKERS)
+        if value
+        and len(value) >= 6
+        and not any(marker in value.lower() for marker in PLACEHOLDER_MARKERS)
     )
 
 

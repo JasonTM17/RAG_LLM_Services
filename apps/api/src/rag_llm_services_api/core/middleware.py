@@ -43,6 +43,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             request_id = uuid.uuid4().hex
 
         token = set_request_id(request_id)
+        request.state.request_id = request_id
         try:
             response = await call_next(request)
             response.headers[REQUEST_ID_HEADER] = request_id
