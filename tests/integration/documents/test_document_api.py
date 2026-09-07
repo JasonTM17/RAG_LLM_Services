@@ -398,3 +398,148 @@ async def test_dev_auth_disabled_fails_closed(test_env) -> None:
     doc_resp = await client.get("/api/v1/documents")
     assert doc_resp.status_code == 401
     assert doc_resp.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+# -------------------------------------------------------------------------
+# Hardening: Traceability, Cleanup, Unicode, and Edge Cases
+# -------------------------------------------------------------------------
+
+
+async def test_upload_storage_key_matches_db_document_and_version_id(test_env) -> None:
+    _, client, storage, _, _ = test_env
+
+    kb = (await client.post("/api/v1/knowledge-bases", json={"name": "Traceability KB"})).json()
+    kb_id = kb["id"]
+
+    pdf_content = b"%PDF-1.4\nTraceability test payload\n%%EOF"
+    upload = (
+        await client.post(
+            "/api/v1/documents",
+            data={"knowledge_base_id": kb_id},
+            files={"file": ("trace.pdf", pdf_content, "application/pdf")},
+        )
+    ).json()
+
+    doc_id = upload["document_id"]
+    version_id = upload["version_id"]
+
+    assert len(storage.objects) == 1
+    stored_key = next(iter(storage.objects.keys()))
+
+    expected_prefix = f"knowledge_bases/{kb_id}/documents/{doc_id}/{version_id}/"
+    assert stored_key.startswith(expected_prefix), (
+        f"Storage key '{stored_key}' must contain the actual document_id ({doc_id}) "
+        f"and version_id ({version_id})"
+    )
+
+
+async def test_download_document_unicode_vietnamese_filename(test_env) -> None:
+    _, client, _, _, _ = test_env
+
+    kb = (await client.post("/api/v1/knowledge-bases", json={"name": "Unicode KB"})).json()
+
+    pdf_content = b"%PDF-1.4\nVietnamese document test\n%%EOF"
+    vn_name = "B\u00e1o c\u00e1o ti\u1ebfn \u0111\u1ed9 k\u1ef9 thu\u1eadt 2026.pdf"
+
+    upload = (
+        await client.post(
+            "/api/v1/documents",
+            data={"knowledge_base_id": kb["id"]},
+            files={"file": (vn_name, pdf_content, "application/pdf")},
+        )
+    ).json()
+
+    doc_id = upload["document_id"]
+
+    dl_resp = await client.get(f"/api/v1/documents/{doc_id}/download")
+    assert dl_resp.status_code == 200
+    assert dl_resp.content == pdf_content
+    cd = dl_resp.headers["content-disposition"]
+    assert "attachment;" in cd
+    assert "filename*=" in cd
+
+
+async def test_delete_knowledge_base_purges_minio_objects(test_env) -> None:
+    _, client, storage, _, _ = test_env
+
+    kb = (await client.post("/api/v1/knowledge-bases", json={"name": "Purge KB"})).json()
+    kb_id = kb["id"]
+
+    pdf_1 = b"%PDF-1.4\nFile 1\n%%EOF"
+    pdf_2 = b"%PDF-1.4\nFile 2\n%%EOF"
+
+    await client.post(
+        "/api/v1/documents",
+        data={"knowledge_base_id": kb_id},
+        files={"file": ("file1.pdf", pdf_1, "application/pdf")},
+    )
+    await client.post(
+        "/api/v1/documents",
+        data={"knowledge_base_id": kb_id},
+        files={"file": ("file2.pdf", pdf_2, "application/pdf")},
+    )
+
+    assert len(storage.objects) == 2
+
+    del_resp = await client.delete(f"/api/v1/knowledge-bases/{kb_id}")
+    assert del_resp.status_code == 204
+
+    # All storage objects for the deleted KB must be purged
+    assert len(storage.objects) == 0
+
+
+async def test_delete_document_with_zero_versions(test_env) -> None:
+    app, client, _, owner_a, _ = test_env
+    from rag_llm_services_api.db.models.document import DocumentModel
+
+    kb = (await client.post("/api/v1/knowledge-bases", json={"name": "Zero Version KB"})).json()
+    kb_id = uuid.UUID(kb["id"])
+
+    # Directly insert a document with 0 versions to test edge case
+    override_session_maker = app.dependency_overrides[get_session]
+    async for session in override_session_maker():
+        doc = DocumentModel(
+            owner_id=owner_a,
+            knowledge_base_id=kb_id,
+            filename="zero_versions.pdf",
+            content_type="application/pdf",
+            status="UPLOADED",
+        )
+        session.add(doc)
+        await session.commit()
+        await session.refresh(doc)
+        doc_id = doc.id
+        break
+
+    # Deleting a document with 0 versions must return 204, NOT false 404
+    del_resp = await client.delete(f"/api/v1/documents/{doc_id}")
+    assert del_resp.status_code == 204
+
+
+async def test_upload_cleans_up_storage_on_db_error(test_env) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    app, _, storage, _, _ = test_env
+
+    # Use direct client with raise_app_exceptions=False to capture 500
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as error_client:
+        kb = (
+            await error_client.post("/api/v1/knowledge-bases", json={"name": "Rollback KB"})
+        ).json()
+        pdf_content = b"%PDF-1.4\nRollback content\n%%EOF"
+
+        with patch(
+            "rag_llm_services_api.infrastructure.repositories.documents.DocumentRepository.create_document_with_version_and_job",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("Simulated database failure"),
+        ):
+            resp = await error_client.post(
+                "/api/v1/documents",
+                data={"knowledge_base_id": kb["id"]},
+                files={"file": ("rollback.pdf", pdf_content, "application/pdf")},
+            )
+            assert resp.status_code == 500
+
+    # Verify no orphaned object is left in storage
+    assert len(storage.objects) == 0

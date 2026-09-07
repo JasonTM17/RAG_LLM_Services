@@ -284,3 +284,81 @@ def test_minio_storage_error_mapping() -> None:
     assert isinstance(app_err_generic, AppError)
     assert app_err_generic.status_code == 500
     assert app_err_generic.code == "STORAGE_ERROR"
+
+
+def test_sanitize_filename_allows_consecutive_dots_in_filename() -> None:
+    assert sanitize_filename("my..notes.pdf") == "my..notes.pdf"
+    assert sanitize_filename("v1.0..draft.pdf") == "v1.0..draft.pdf"
+    assert sanitize_filename("document...txt") == "document...txt"
+
+
+def test_format_content_disposition_unicode_and_ascii() -> None:
+    from rag_llm_services_api.api.v1.documents import format_content_disposition
+
+    # ASCII filename
+    ascii_res = format_content_disposition("report.pdf")
+    assert ascii_res == "attachment; filename=\"report.pdf\"; filename*=UTF-8''report.pdf"
+
+    # Vietnamese Unicode filename
+    vn_res = format_content_disposition("Tài liệu kỹ thuật.pdf")
+    # Must be valid ASCII to avoid Starlette latin-1 UnicodeEncodeError
+    vn_res.encode("latin-1")
+    assert "filename*=UTF-8''T%C3%A0i%20li%E1%BB%87u%20k%E1%BB%B9%20thu%E1%BA%ADt.pdf" in vn_res
+
+
+@pytest.mark.asyncio
+async def test_minio_object_storage_stream_chunks_iteratively() -> None:
+    from unittest.mock import MagicMock
+
+    storage = MinIOObjectStorage(
+        endpoint="http://localhost:9000",
+        access_key="test-key",
+        secret_key="test-secret",
+        bucket_name="test-bucket",
+    )
+
+    mock_resp = MagicMock()
+    chunks = [b"chunk1_", b"chunk2_", b"chunk3", b""]
+    chunk_iter = iter(chunks)
+    mock_resp.read.side_effect = lambda _size: next(chunk_iter)
+
+    storage._client.get_object = MagicMock(return_value=mock_resp)
+
+    streamed = []
+    async for c in storage.get_object_stream(
+        "knowledge_bases/kb/documents/d/v/hash.bin", chunk_size=7
+    ):
+        streamed.append(c)
+
+    assert streamed == [b"chunk1_", b"chunk2_", b"chunk3"]
+    mock_resp.close.assert_called_once()
+    mock_resp.release_conn.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_minio_object_storage_put_get_delete_crud() -> None:
+    from unittest.mock import MagicMock
+
+    storage = MinIOObjectStorage(
+        endpoint="http://localhost:9000",
+        access_key="test-key",
+        secret_key="test-secret",
+        bucket_name="test-bucket",
+    )
+
+    storage._client.put_object = MagicMock()
+    storage._client.remove_object = MagicMock()
+    storage._client.stat_object = MagicMock()
+    storage._client.bucket_exists = MagicMock(return_value=True)
+
+    await storage.put_object("key1", b"hello", 5, "text/plain")
+    storage._client.put_object.assert_called_once()
+
+    await storage.delete_object("key1")
+    storage._client.remove_object.assert_called_once_with("test-bucket", "key1")
+
+    exists = await storage.object_exists("key1")
+    assert exists is True
+
+    await storage.ensure_bucket_exists()
+    storage._client.bucket_exists.assert_called_once_with("test-bucket")

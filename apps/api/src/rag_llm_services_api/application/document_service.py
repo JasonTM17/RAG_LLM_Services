@@ -42,10 +42,10 @@ def sanitize_filename(filename: str) -> str:
     if "\x00" in filename:
         raise ValidationError("Filename contains illegal null bytes", code="INVALID_FILENAME")
 
-    normalized = filename.replace("\\", "/")
-    # Reject path traversal patterns explicitly
-    segments = [s for s in normalized.split("/") if s]
-    if ".." in segments or any(".." in s for s in segments):
+    normalized = filename.replace("\\", "/").strip()
+    # Reject path traversal segments explicitly
+    segments = [s.strip() for s in normalized.split("/") if s.strip()]
+    if any(s in ("..", ".") for s in segments):
         raise ValidationError(
             "Path traversal characters are not permitted in filenames",
             code="INVALID_FILENAME",
@@ -154,12 +154,17 @@ class DocumentApplicationService:
         self._storage = storage
         self._max_upload_size_bytes = max_upload_size_bytes
 
+    @property
+    def max_upload_size_bytes(self) -> int:
+        return self._max_upload_size_bytes
+
     async def upload_document(
         self,
         owner_id: UUID,
         knowledge_base_id: UUID,
         raw_filename: str,
         content: bytes,
+        checksum_sha256: str | None = None,
     ) -> tuple[DocumentModel, DocumentVersionModel, IngestionJobModel]:
         """Validate upload, compute checksum, store in MinIO, and persist metadata."""
         # 1. Verify target knowledge base exists and belongs to owner
@@ -184,24 +189,27 @@ class DocumentApplicationService:
         # 4. MIME sniffing and content validation
         content_type = sniff_and_validate_mime(safe_filename, content)
 
-        # 5. Streaming SHA-256 calculation
-        hasher = StreamHasher(max_size_bytes=self._max_upload_size_bytes)
-        hasher.update(content)
-        checksum_sha256 = hasher.hexdigest
+        # 5. Checksum calculation (or reuse precomputed)
+        if checksum_sha256 is None:
+            hasher = StreamHasher(max_size_bytes=self._max_upload_size_bytes)
+            hasher.update(content)
+            computed_checksum = hasher.hexdigest
+        else:
+            computed_checksum = checksum_sha256
 
         # 6. Check duplicate checksum scoped to this knowledge base
         existing_version = await self._doc_repo.find_version_by_checksum(
             owner_id=owner_id,
             knowledge_base_id=knowledge_base_id,
-            checksum_sha256=checksum_sha256,
+            checksum_sha256=computed_checksum,
         )
         if existing_version is not None:
             raise DuplicateDocumentError(
-                f"A document with checksum '{checksum_sha256}' already exists in this knowledge base",
+                f"A document with checksum '{computed_checksum}' already exists in this knowledge base",
                 code="DUPLICATE_DOCUMENT",
             )
 
-        # 7. Generate temporary IDs to format storage key
+        # 7. Generate IDs to format deterministic storage key matching DB record IDs
         import uuid
 
         doc_id = uuid.uuid4()
@@ -210,7 +218,7 @@ class DocumentApplicationService:
             kb_id=knowledge_base_id,
             doc_id=doc_id,
             version_id=version_id,
-            sha256_hex=checksum_sha256,
+            sha256_hex=computed_checksum,
         )
 
         # 8. Persist bytes to MinIO
@@ -221,16 +229,29 @@ class DocumentApplicationService:
             content_type=content_type,
         )
 
-        # 9. Persist database records
-        doc, version, job = await self._doc_repo.create_document_with_version_and_job(
-            owner_id=owner_id,
-            knowledge_base_id=knowledge_base_id,
-            filename=safe_filename,
-            content_type=content_type,
-            file_size_bytes=file_size,
-            checksum_sha256=checksum_sha256,
-            storage_key=storage_key,
-        )
+        # 9. Persist database records using the exact matching IDs, cleaning up on failure
+        try:
+            doc, version, job = await self._doc_repo.create_document_with_version_and_job(
+                document_id=doc_id,
+                version_id=version_id,
+                owner_id=owner_id,
+                knowledge_base_id=knowledge_base_id,
+                filename=safe_filename,
+                content_type=content_type,
+                file_size_bytes=file_size,
+                checksum_sha256=computed_checksum,
+                storage_key=storage_key,
+            )
+        except Exception:
+            try:
+                await self._storage.delete_object(storage_key)
+            except Exception as cleanup_err:  # noqa: BLE001
+                logger.warning(
+                    "Failed to clean up storage object '%s' after DB failure: %s",
+                    storage_key,
+                    cleanup_err,
+                )
+            raise
 
         return doc, version, job
 
@@ -254,9 +275,19 @@ class DocumentApplicationService:
         doc = await self.get_document(owner_id, document_id)
         if not doc.versions:
             raise NotFoundError("Document has no stored versions")
-        latest_version = doc.versions[-1]
-        raw_bytes = await self._storage.get_object(latest_version.storage_key)
-        return raw_bytes, latest_version.mime_type, doc.filename
+
+        # Select current version if specified, else highest version number
+        target_version: DocumentVersionModel | None = None
+        if doc.current_version_id is not None:
+            for v in doc.versions:
+                if v.id == doc.current_version_id:
+                    target_version = v
+                    break
+        if target_version is None:
+            target_version = max(doc.versions, key=lambda v: v.version_number)
+
+        raw_bytes = await self._storage.get_object(target_version.storage_key)
+        return raw_bytes, target_version.mime_type, doc.filename
 
     async def delete_document(
         self,
@@ -265,13 +296,20 @@ class DocumentApplicationService:
     ) -> None:
         """Delete document from database and purge objects from storage."""
         storage_keys = await self._doc_repo.delete_document(owner_id, document_id)
-        if not storage_keys:
+        if storage_keys is None:
             raise NotFoundError("Document not found")
         for key in storage_keys:
             try:
                 await self._storage.delete_object(key)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Failed to delete storage object '%s': %s", key, exc)
+
+    async def delete_storage_object(self, storage_key: str) -> None:
+        """Purge a single object from storage."""
+        try:
+            await self._storage.delete_object(storage_key)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to delete storage object '%s': %s", storage_key, exc)
 
     async def reindex_document(
         self,

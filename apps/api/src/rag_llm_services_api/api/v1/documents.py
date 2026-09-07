@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import io
 from typing import Annotated
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_llm_services_api.api.dependencies.auth import get_current_user_id
@@ -19,14 +21,24 @@ from rag_llm_services_api.api.v1.schemas.documents import (
     IngestionJobResponse,
 )
 from rag_llm_services_api.application.document_service import DocumentApplicationService
-from rag_llm_services_api.core.errors import ValidationError
+from rag_llm_services_api.core.errors import DuplicateDocumentError, ValidationError
 from rag_llm_services_api.db.session import get_session
 from rag_llm_services_api.infrastructure.repositories.documents import DocumentRepository
 from rag_llm_services_api.infrastructure.repositories.knowledge_bases import KnowledgeBaseRepository
-from rag_llm_services_api.infrastructure.storage.base import ObjectStoragePort
+from rag_llm_services_api.infrastructure.storage.base import ObjectStoragePort, StreamHasher
 from rag_llm_services_api.infrastructure.storage.minio import get_object_storage
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def format_content_disposition(filename: str) -> str:
+    """Format RFC 6266 / RFC 5987 Content-Disposition header with safe ASCII fallback and UTF-8 encoded filename."""
+    clean_name = filename.replace("\r", "").replace("\n", "").strip()
+    ascii_name = clean_name.encode("ascii", "ignore").decode("ascii").replace('"', '\\"').strip()
+    if not ascii_name:
+        ascii_name = "document"
+    utf8_encoded = quote(clean_name, encoding="utf-8")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{utf8_encoded}"
 
 
 def get_document_service(
@@ -60,14 +72,39 @@ async def upload_document(
     if not file.filename:
         raise ValidationError("Uploaded file must have a filename", code="INVALID_FILENAME")
 
-    content = await file.read()
-    doc, version, job = await service.upload_document(
-        owner_id=owner_id,
-        knowledge_base_id=knowledge_base_id,
-        raw_filename=file.filename,
-        content=content,
-    )
-    await session.commit()
+    # Bounded chunked read with fail-fast size enforcement
+    hasher = StreamHasher(max_size_bytes=service.max_upload_size_bytes)
+    chunks: list[bytes] = []
+    chunk_size = 64 * 1024
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        hasher.update(chunk)
+        chunks.append(chunk)
+
+    content = b"".join(chunks)
+    if not content:
+        raise ValidationError("Cannot upload empty file", code="EMPTY_FILE")
+
+    try:
+        doc, version, job = await service.upload_document(
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            raw_filename=file.filename,
+            content=content,
+            checksum_sha256=hasher.hexdigest,
+        )
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise DuplicateDocumentError(
+            "A document with this checksum already exists in this knowledge base",
+            code="DUPLICATE_DOCUMENT",
+        ) from exc
+    except Exception:
+        await session.rollback()
+        raise
 
     assert doc.created_at is not None, "Created timestamp must be populated"
 
@@ -147,10 +184,11 @@ async def download_document(
     content_bytes, content_type, filename = await service.get_document_content(
         owner_id, document_id
     )
+    disposition = format_content_disposition(filename)
     return StreamingResponse(
         io.BytesIO(content_bytes),
         media_type=content_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": disposition},
     )
 
 

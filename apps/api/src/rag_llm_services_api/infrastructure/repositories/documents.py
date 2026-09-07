@@ -49,11 +49,14 @@ class DocumentRepository:
         file_size_bytes: int,
         checksum_sha256: str,
         storage_key: str,
+        document_id: UUID | None = None,
+        version_id: UUID | None = None,
+        job_id: UUID | None = None,
     ) -> tuple[DocumentModel, DocumentVersionModel, IngestionJobModel]:
         """Atomically create a Document, its initial DocumentVersion, and an IngestionJob."""
-        doc_id = uuid.uuid4()
-        ver_id = uuid.uuid4()
-        job_id = uuid.uuid4()
+        doc_id = document_id or uuid.uuid4()
+        ver_id = version_id or uuid.uuid4()
+        j_id = job_id or uuid.uuid4()
 
         document = DocumentModel(
             id=doc_id,
@@ -75,7 +78,7 @@ class DocumentRepository:
             mime_type=content_type,
         )
         job = IngestionJobModel(
-            id=job_id,
+            id=j_id,
             owner_id=owner_id,
             document_id=doc_id,
             document_version_id=ver_id,
@@ -130,11 +133,11 @@ class DocumentRepository:
         self,
         owner_id: UUID,
         doc_id: UUID,
-    ) -> list[str]:
-        """Delete document and return associated storage keys for MinIO cleanup."""
+    ) -> list[str] | None:
+        """Delete document and return associated storage keys for MinIO cleanup, or None if not found."""
         doc = await self.get_document_by_id(owner_id, doc_id)
         if doc is None:
-            return []
+            return None
         storage_keys = [ver.storage_key for ver in doc.versions]
         await self._session.delete(doc)
         await self._session.flush()

@@ -127,10 +127,25 @@ class MinIOObjectStorage(ObjectStoragePort):
     async def get_object_stream(
         self, object_key: str, chunk_size: int = 65536
     ) -> AsyncIterator[bytes]:
-        """Stream raw bytes from object storage."""
-        raw_bytes = await self.get_object(object_key)
-        for i in range(0, len(raw_bytes), chunk_size):
-            yield raw_bytes[i : i + chunk_size]
+        """Stream raw bytes from object storage without buffering the full object into memory."""
+
+        def _open_stream():
+            return self._client.get_object(self.bucket_name, object_key)
+
+        try:
+            response = await asyncio.to_thread(_open_stream)
+        except Exception as exc:
+            raise self._map_error(exc, object_key) from exc
+
+        try:
+            while True:
+                chunk = await asyncio.to_thread(response.read, chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            response.close()
+            response.release_conn()
 
     async def delete_object(self, object_key: str) -> None:
         """Delete an object from object storage."""

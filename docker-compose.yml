@@ -56,10 +56,14 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-replace-with-local-minio-access-key}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-replace-with-local-minio-secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-rag-documents}
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY:-replace-with-local-minio-access-key} $${MINIO_SECRET_KEY:-replace-with-local-minio-secret};
-      /usr/bin/mc mb --ignore-existing local/$${MINIO_BUCKET:-rag-documents};
+      /usr/bin/mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY};
+      /usr/bin/mc mb --ignore-existing local/$${MINIO_BUCKET};
       exit 0;
       "
 

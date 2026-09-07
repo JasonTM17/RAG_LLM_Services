@@ -113,3 +113,18 @@ class KnowledgeBaseRepository:
         result = await self._session.execute(stmt)
         deleted_id = result.scalar_one_or_none()
         return deleted_id is not None
+
+    async def get_storage_keys_for_kb(self, owner_id: UUID, kb_id: UUID) -> Sequence[str]:
+        """Retrieve all object storage keys for documents under a knowledge base."""
+        from rag_llm_services_api.db.models.document import DocumentModel, DocumentVersionModel
+
+        stmt = (
+            select(DocumentVersionModel.storage_key)
+            .join(DocumentModel, DocumentVersionModel.document_id == DocumentModel.id)
+            .where(
+                DocumentModel.knowledge_base_id == kb_id,
+                DocumentModel.owner_id == owner_id,
+            )
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
