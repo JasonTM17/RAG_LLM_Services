@@ -96,18 +96,27 @@ services:
       INGESTION_TASK_RETRY_BACKOFF_MAX_SECONDS: ${INGESTION_TASK_RETRY_BACKOFF_MAX_SECONDS:-300}
       INGESTION_TASK_RETRY_JITTER: ${INGESTION_TASK_RETRY_JITTER:-true}
       QUEUE_VISIBILITY_TIMEOUT_SECONDS: ${QUEUE_VISIBILITY_TIMEOUT_SECONDS:-3600}
+      WORKER_POOL: ${WORKER_POOL:-threads}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-replace-with-local-minio-access-key}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-replace-with-local-minio-secret}
       MINIO_BUCKET: ${MINIO_BUCKET:-rag-documents}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-bge-m3}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
+      WORKER_METRICS_ENABLED: ${WORKER_METRICS_ENABLED:-true}
+      WORKER_METRICS_HOST: ${WORKER_METRICS_HOST:-0.0.0.0}
+      WORKER_METRICS_PORT: 9108
+    ports:
+      - "${WORKER_METRICS_HOST_PORT:-9108}:9108"
     volumes:
       - .:/app
     command: >
       sh -c "uv sync --frozen &&
       uv run celery -A rag_llm_services_worker.main:celery_app worker
       --loglevel=INFO
+      --pool=$${WORKER_POOL:-threads}
+      --concurrency=$${WORKER_CONCURRENCY:-4}
       --queues=$${INGESTION_QUEUE_NAME:-ingestion}"
 
   n8n:
@@ -140,8 +149,76 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
 
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v2.55.1}
+    container_name: rag_prometheus
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      n8n:
+        condition: service_started
+      postgres-exporter:
+        condition: service_started
+      redis-exporter:
+        condition: service_started
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}"
+      - "--web.enable-lifecycle"
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+
+  postgres-exporter:
+    image: ${POSTGRES_EXPORTER_IMAGE:-quay.io/prometheuscommunity/postgres-exporter:v0.15.0}
+    container_name: rag_postgres_exporter
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-rag_app}:${POSTGRES_PASSWORD:-replace-with-local-password}@postgres:5432/${POSTGRES_DB:-rag_llm_services}?sslmode=disable"
+    ports:
+      - "${POSTGRES_EXPORTER_PORT:-9187}:9187"
+
+  redis-exporter:
+    image: ${REDIS_EXPORTER_IMAGE:-oliver006/redis_exporter:v1.62.0}
+    container_name: rag_redis_exporter
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    command:
+      - "--redis.addr=redis://redis:6379"
+    ports:
+      - "${REDIS_EXPORTER_PORT:-9121}:9121"
+
+  cadvisor:
+    image: ${CADVISOR_IMAGE:-gcr.io/cadvisor/cadvisor:v0.49.1}
+    container_name: rag_cadvisor
+    profiles: ["container-observability"]
+    restart: unless-stopped
+    ports:
+      - "${CADVISOR_PORT:-8080}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+
 volumes:
   postgres_data:
   redis_data:
   minio_data:
   n8n_data:
+  prometheus_data:

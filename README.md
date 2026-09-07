@@ -6,7 +6,7 @@ The target system lets a user upload learning documents, build owner-scoped know
 
 ## Current Status
 
-This repository has completed Phases 01-09: repository contract, backend foundation, document management/storage, RAG ingestion/embeddings, hybrid retrieval/reranking, the DeepSeek-compatible LLM/chat gateway, the agent-backed study workflow layer, Redis/Celery async ingestion infrastructure, and n8n automation workflow contracts. The FastAPI app now supports typed settings, structured redacting JSON logs, request IDs, standard error envelopes, async SQLAlchemy/Alembic, health endpoints, owner-scoped knowledge bases/documents, upload/download/delete APIs, queued document ingestion, job status/queue status APIs, parser/chunking/embedding ingestion, `POST /api/v1/retrieval/search`, `POST /api/v1/chat`, `POST /api/v1/chat/stream`, `POST /api/v1/study/quiz`, `POST /api/v1/study/flashcards`, `POST /api/v1/study/learning-plan`, `POST /api/v1/automation/reports`, `POST /api/v1/evaluations`, and `GET /api/v1/evaluations/{run_id}`. The compose stack includes n8n with persistent storage and metrics enabled, and five inactive credential-free n8n workflow exports live under `workflows/n8n/`. Frontend, full Prometheus `/metrics`, Grafana dashboards, the full evaluation runner, CI, deployment, live DeepSeek proof, and acceptance-demo behavior are intentionally not implemented yet.
+This repository has completed Phases 01-10: repository contract, backend foundation, document management/storage, RAG ingestion/embeddings, hybrid retrieval/reranking, the DeepSeek-compatible LLM/chat gateway, the agent-backed study workflow layer, Redis/Celery async ingestion infrastructure, n8n automation workflow contracts, and Prometheus observability. The FastAPI app now supports typed settings, structured redacting JSON logs, request IDs, standard error envelopes, async SQLAlchemy/Alembic, health endpoints, `GET /metrics`, owner-scoped knowledge bases/documents, upload/download/delete APIs, queued document ingestion, job status/queue status APIs, parser/chunking/embedding ingestion, `POST /api/v1/retrieval/search`, `POST /api/v1/chat`, `POST /api/v1/chat/stream`, `POST /api/v1/study/quiz`, `POST /api/v1/study/flashcards`, `POST /api/v1/study/learning-plan`, `POST /api/v1/automation/reports`, `POST /api/v1/evaluations`, and `GET /api/v1/evaluations/{run_id}`. The compose stack includes n8n with persistent storage and metrics enabled, a worker metrics endpoint, Prometheus scrape configuration, Redis/Postgres exporters, and optional cAdvisor. Frontend, Grafana dashboards, the full evaluation runner, CI, deployment, live DeepSeek proof, and acceptance-demo behavior are intentionally not implemented yet.
 
 ## Architecture
 
@@ -36,9 +36,10 @@ More detail:
 - Primary model alias: `deepseek-v4-flash`.
 - Default LLM API mode: `responses`.
 - Live DeepSeek tests: opt-in only through `RUN_DEEPSEEK_LIVE_TESTS=true`.
-- Compose worker queue: `QUEUE_PROVIDER=celery`, Redis broker/result backend, and `INGESTION_QUEUE_NAME=ingestion`.
+- Compose worker queue: `QUEUE_PROVIDER=celery`, Redis broker/result backend, `INGESTION_QUEUE_NAME=ingestion`, and `WORKER_POOL=threads` so worker task metrics share the scraped process registry; `WORKER_METRICS_HOST_PORT` can change the host bind while Prometheus keeps scraping `worker:9108`.
 - Compose n8n image: `docker.n8n.io/n8nio/n8n:2.37.11`, overridable with `N8N_IMAGE`.
 - n8n workflow API base from the container: `RAG_API_BASE_URL=http://host.docker.internal:8000/api/v1`.
+- Prometheus image: `prom/prometheus:v2.55.1`, scraping API `GET /metrics`, worker `GET /metrics`, n8n, Postgres exporter, Redis exporter, and optional cAdvisor.
 
 Local secrets live in `.env` and must not be committed. The application reads configuration from **environment variables only** — `.env` files are loaded by the runtime, not parsed in-process: `make api-run` passes `--env-file .env` to uvicorn, and Compose reads `.env` for variable substitution into service environments. `.env.example` documents the placeholder-only configuration surface.
 
@@ -58,6 +59,7 @@ Phase checks:
 .\scripts\verify-phase-07.ps1
 .\scripts\verify-phase-08.ps1
 .\scripts\verify-phase-09.ps1
+.\scripts\verify-phase-10.ps1
 ```
 
 The Makefile mirrors the same contract for environments with `make`:
@@ -74,7 +76,9 @@ make verify-phase-06
 make verify-phase-07
 make verify-phase-08
 make verify-phase-09
+make verify-phase-10
 make validate-n8n
+make validate-prometheus
 make api-test      # uv run pytest -q
 make api-lint      # ruff check + format check
 make api-migrate   # alembic upgrade head (needs a configured Postgres)
@@ -82,7 +86,7 @@ make api-run       # uvicorn with reload on :8000
 make worker-run    # celery ingestion worker for the configured queue
 ```
 
-Health endpoints once the API is running: `GET /health/live` (process-only) and `GET /health/ready` (bounded Postgres/Redis/Celery broker/MinIO probes). Retrieval search is available at `POST /api/v1/retrieval/search` after documents have been indexed; mocked chat is available through `POST /api/v1/chat` and semantic SSE through `POST /api/v1/chat/stream`. Agent-backed study generation is available through `POST /api/v1/study/quiz`, `POST /api/v1/study/flashcards`, and `POST /api/v1/study/learning-plan`. n8n automation contracts are available through `workflows/n8n/`, `POST /api/v1/automation/reports`, and `POST/GET /api/v1/evaluations`. Future phases will add web, Prometheus scrape endpoint, Grafana dashboards, backup, restore, and acceptance-demo targets.
+Health endpoints once the API is running: `GET /health/live` (process-only), `GET /health/ready` (bounded Postgres/Redis/Celery broker/MinIO probes), and `GET /metrics` (Prometheus text exposition with no external provider calls). Retrieval search is available at `POST /api/v1/retrieval/search` after documents have been indexed; mocked chat is available through `POST /api/v1/chat` and semantic SSE through `POST /api/v1/chat/stream`. Agent-backed study generation is available through `POST /api/v1/study/quiz`, `POST /api/v1/study/flashcards`, and `POST /api/v1/study/learning-plan`. n8n automation contracts are available through `workflows/n8n/`, `POST /api/v1/automation/reports`, and `POST/GET /api/v1/evaluations`. Future phases will add web, Grafana dashboards, backup, restore, and acceptance-demo targets.
 
 ## Plan Authority
 

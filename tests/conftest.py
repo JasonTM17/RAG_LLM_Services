@@ -18,6 +18,7 @@ _SCRUB_PREFIXES = (
     "API_",
     "CORS_",
     "RAG_",
+    "WORKER_",
     "POSTGRES_",
     "DATABASE_",
     "REDIS_",

@@ -61,6 +61,8 @@ KNOWN_ENV_VARS = frozenset(
         "INGESTION_TASK_RETRY_JITTER",
         "QUEUE_VISIBILITY_TIMEOUT_SECONDS",
         "RETRIEVAL_CACHE_TTL_SECONDS",
+        "WORKER_POOL",
+        "WORKER_CONCURRENCY",
         "MINIO_ENDPOINT",
         "MINIO_ACCESS_KEY",
         "MINIO_SECRET_KEY",
@@ -116,7 +118,20 @@ KNOWN_ENV_VARS = frozenset(
         "GENERIC_TIMEZONE",
         "RAG_API_BASE_URL",
         "RAG_WORKFLOW_OWNER_ID",
+        "WORKER_METRICS_ENABLED",
+        "WORKER_METRICS_HOST",
+        "WORKER_METRICS_PORT",
+        "WORKER_METRICS_HOST_PORT",
+        "PROMETHEUS_IMAGE",
         "PROMETHEUS_BASE_URL",
+        "PROMETHEUS_PORT",
+        "PROMETHEUS_RETENTION_TIME",
+        "POSTGRES_EXPORTER_IMAGE",
+        "POSTGRES_EXPORTER_PORT",
+        "REDIS_EXPORTER_IMAGE",
+        "REDIS_EXPORTER_PORT",
+        "CADVISOR_IMAGE",
+        "CADVISOR_PORT",
         "GRAFANA_BASE_URL",
         "GRAFANA_ADMIN_USER",
         "GRAFANA_ADMIN_PASSWORD",
@@ -250,6 +265,8 @@ class QueueSettings(BaseSettings):
     retrieval_cache_ttl_seconds: int = Field(
         300, ge=0, le=86400, validation_alias="RETRIEVAL_CACHE_TTL_SECONDS"
     )
+    worker_pool: str = Field("threads", validation_alias="WORKER_POOL")
+    worker_concurrency: int = Field(4, ge=1, le=64, validation_alias="WORKER_CONCURRENCY")
 
     @field_validator("provider")
     @classmethod
@@ -265,6 +282,14 @@ class QueueSettings(BaseSettings):
         normalized = value.strip()
         if not normalized or not all(ch.isalnum() or ch in {"-", "_"} for ch in normalized):
             raise ValueError("INGESTION_QUEUE_NAME must contain only letters, numbers, '-' or '_'")
+        return normalized
+
+    @field_validator("worker_pool")
+    @classmethod
+    def _check_worker_pool(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"threads", "solo"}:
+            raise ValueError("WORKER_POOL must be one of: threads, solo")
         return normalized
 
 
@@ -454,9 +479,33 @@ class N8nSettings(BaseSettings):
 class ObservabilitySettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
+    worker_metrics_enabled: bool = Field(False, validation_alias="WORKER_METRICS_ENABLED")
+    worker_metrics_host: str = Field("0.0.0.0", validation_alias="WORKER_METRICS_HOST")
+    worker_metrics_port: int = Field(9108, ge=1, le=65535, validation_alias="WORKER_METRICS_PORT")
+    worker_metrics_host_port: int = Field(
+        9108, ge=1, le=65535, validation_alias="WORKER_METRICS_HOST_PORT"
+    )
+    prometheus_image: str = Field("prom/prometheus:v2.55.1", validation_alias="PROMETHEUS_IMAGE")
     prometheus_base_url: str = Field(
         "http://prometheus:9090", validation_alias="PROMETHEUS_BASE_URL"
     )
+    prometheus_port: int = Field(9090, ge=1, le=65535, validation_alias="PROMETHEUS_PORT")
+    prometheus_retention_time: str = Field("15d", validation_alias="PROMETHEUS_RETENTION_TIME")
+    postgres_exporter_image: str = Field(
+        "quay.io/prometheuscommunity/postgres-exporter:v0.15.0",
+        validation_alias="POSTGRES_EXPORTER_IMAGE",
+    )
+    postgres_exporter_port: int = Field(
+        9187, ge=1, le=65535, validation_alias="POSTGRES_EXPORTER_PORT"
+    )
+    redis_exporter_image: str = Field(
+        "oliver006/redis_exporter:v1.62.0", validation_alias="REDIS_EXPORTER_IMAGE"
+    )
+    redis_exporter_port: int = Field(9121, ge=1, le=65535, validation_alias="REDIS_EXPORTER_PORT")
+    cadvisor_image: str = Field(
+        "gcr.io/cadvisor/cadvisor:v0.49.1", validation_alias="CADVISOR_IMAGE"
+    )
+    cadvisor_port: int = Field(8080, ge=1, le=65535, validation_alias="CADVISOR_PORT")
     grafana_base_url: str = Field("http://grafana:3000", validation_alias="GRAFANA_BASE_URL")
     grafana_admin_user: str = Field("admin", validation_alias="GRAFANA_ADMIN_USER")
     grafana_admin_password: str = Field(

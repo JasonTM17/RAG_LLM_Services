@@ -139,6 +139,27 @@ def test_non_secret_extras_survive_untouched() -> None:
     assert payload["status_code"] == 200
 
 
+def test_private_prompt_and_document_text_extras_are_redacted() -> None:
+    raw_query = "private question about a sensitive document"
+    doc_text = "confidential document body"
+
+    payload = _format(
+        _record(
+            "retrieval completed",
+            query=raw_query,
+            document_text=doc_text,
+            stage="retrieval.context",
+        )
+    )
+
+    serialized = json.dumps(payload)
+    assert payload["query"] == REDACTED
+    assert payload["document_text"] == REDACTED
+    assert payload["stage"] == "retrieval.context"
+    assert raw_query not in serialized
+    assert doc_text not in serialized
+
+
 def test_configure_logging_is_idempotent(restore_root_logger) -> None:
     configure_logging(level="INFO", service="svc", env="test")
     assert len(logging.getLogger().handlers) == 1

@@ -6,11 +6,13 @@ requires-python = ">=3.13"
 dependencies = [
     "openai-agents>=0.3",
     "pydantic>=2.9",
+    "rag-llm-services-observability",
     "rag-llm-services-llm",
     "rag-llm-services-rag",
 ]
 
 [tool.uv.sources]
+rag-llm-services-observability = { workspace = true }
 rag-llm-services-llm = { workspace = true }
 rag-llm-services-rag = { workspace = true }
 

@@ -30,6 +30,8 @@ def build_celery_app(settings: Settings) -> Celery:
         task_acks_late=True,
         task_reject_on_worker_lost=True,
         worker_prefetch_multiplier=1,
+        worker_pool=settings.queue.worker_pool,
+        worker_concurrency=settings.queue.worker_concurrency,
         broker_transport_options={"visibility_timeout": visibility_timeout},
         result_backend_transport_options={"visibility_timeout": visibility_timeout},
         task_routes={INGESTION_TASK_NAME: {"queue": settings.queue.ingestion_queue_name}},

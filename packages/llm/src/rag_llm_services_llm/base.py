@@ -54,6 +54,20 @@ class LLMResponse:
 
 
 @dataclass(frozen=True)
+class LLMStructuredResponse:
+    """Provider-neutral structured output with usage metadata."""
+
+    output: Mapping[str, Any]
+    model: str
+    provider: str
+    usage: LLMUsage
+    latency_ms: float
+    retry_count: int = 0
+    raw_response_id: str | None = None
+    finish_reason: str | None = None
+
+
+@dataclass(frozen=True)
 class LLMStreamEvent:
     """One provider streaming event normalized enough for API SSE output."""
 
@@ -96,6 +110,14 @@ class LLMProvider(Protocol):
         schema: Mapping[str, Any],
     ) -> Mapping[str, Any]:
         """Return parsed structured output."""
+        ...
+
+    async def structured_response(
+        self,
+        request: LLMRequest,
+        schema: Mapping[str, Any],
+    ) -> LLMStructuredResponse:
+        """Return parsed structured output with provider usage metadata."""
         ...
 
     def capabilities(self) -> ProviderCapabilities:

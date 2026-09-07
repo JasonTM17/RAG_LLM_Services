@@ -4,7 +4,8 @@ Redaction layers, each negative-tested:
 
 1. Recursive key denylist over ``extra`` (case-insensitive): a denied key at
    ANY nesting level has its value replaced wholesale; dict, list, tuple, set,
-   and frozenset values are traversed.
+   and frozenset values are traversed. The denylist includes credentials plus
+   private prompt/query/document text fields that callers must never log.
 2. Value-pattern scrub of secret-looking strings (``sk-...``, ``ghp_...``,
    ``Bearer ...``) at every nesting level, in message text, and again on the
    fully serialized output (so ``repr()``/``str()`` fallbacks of arbitrary
@@ -34,7 +35,8 @@ REDACTED = "[REDACTED]"
 # Layer 1: key denylist matched case-insensitively against extra keys at any
 # nesting level.
 _SENSITIVE_KEY_PATTERN = re.compile(
-    r"api[-_]?key|authorization|password|secret|token|credential|cookie",
+    r"api[-_]?key|authorization|password|secret|token|credential|cookie"
+    r"|document[-_]?text|document[-_]?content|raw[-_]?text|raw[-_]?query|prompt|query",
     re.IGNORECASE,
 )
 

@@ -9,6 +9,7 @@ request executed by the same task.
 
 from __future__ import annotations
 
+import time
 import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -17,9 +18,51 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from rag_llm_services_observability.context import request_id_var, set_request_id
+from rag_llm_services_observability.metrics import record_error, record_http_request
 from rag_llm_services_shared.constants import CLIENT_REQUEST_ID_PATTERN, REQUEST_ID_HEADER
 
 _CLIENT_REQUEST_ID_PATTERN = CLIENT_REQUEST_ID_PATTERN
+
+
+def _route_template(request: Request) -> str | None:
+    """Return the matched Starlette route template, never the raw request path."""
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    return path if isinstance(path, str) else None
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Record low-cardinality HTTP request metrics for every API request."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        super().__init__(app)
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        """Measure the request and avoid user-supplied path values in labels."""
+        started = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            record_http_request(
+                method=request.method,
+                route=_route_template(request),
+                status_code=500,
+                duration_seconds=time.perf_counter() - started,
+            )
+            record_error("http", "exception")
+            raise
+
+        record_http_request(
+            method=request.method,
+            route=_route_template(request),
+            status_code=response.status_code,
+            duration_seconds=time.perf_counter() - started,
+        )
+        if response.status_code >= 500:
+            record_error("http", "server_error")
+        elif response.status_code >= 400:
+            record_error("http", "client_error")
+        return response
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):

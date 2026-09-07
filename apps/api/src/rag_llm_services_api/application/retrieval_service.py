@@ -12,8 +12,11 @@ from rag_llm_services_api.infrastructure.repositories.chunks import ChunkReposit
 from rag_llm_services_api.infrastructure.repositories.rag_queries import RagQueryRepository
 from rag_llm_services_embeddings.base import EmbeddingProvider
 from rag_llm_services_observability.metrics import (
+    record_cache_miss,
+    record_error,
     record_retrieval_query,
     record_retrieval_stage_latency,
+    record_retrieved_chunks,
 )
 from rag_llm_services_rag.retrieval.context import ContextBuilder
 from rag_llm_services_rag.retrieval.fusion import ReciprocalRankFusion
@@ -103,6 +106,9 @@ class RetrievalService:
     ) -> RetrievalServiceResponse:
         """Execute end-to-end retrieval search with tenant isolation."""
         start_time = time.perf_counter()
+        # Phase 08 ships retrieval cache key conventions; until read-through
+        # caching is implemented, searches are observed as retrieval cache misses.
+        record_cache_miss("retrieval")
         stage_latencies_ms = {
             "normalize": 0.0,
             "vector": 0.0,
@@ -128,9 +134,9 @@ class RetrievalService:
         if not normalized_query:
             elapsed_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
             record_retrieval_stage_latency("total", elapsed_ms)
-            record_retrieval_query(
-                method.value if isinstance(method, RetrievalMethod) else str(method)
-            )
+            method_label = method.value if isinstance(method, RetrievalMethod) else str(method)
+            record_retrieval_query(method_label)
+            record_retrieved_chunks(method_label, 0)
             return RetrievalServiceResponse(
                 query=query,
                 retrieval_method=method,
@@ -241,7 +247,9 @@ class RetrievalService:
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         rounded_elapsed_ms = round(elapsed_ms, 2)
         record_retrieval_stage_latency("total", rounded_elapsed_ms)
-        record_retrieval_query(method.value if isinstance(method, RetrievalMethod) else str(method))
+        method_label = method.value if isinstance(method, RetrievalMethod) else str(method)
+        record_retrieval_query(method_label)
+        record_retrieved_chunks(method_label, len(reranked_results))
 
         # 7. Record query audit event (avoid logging sensitive query/PII in log labels)
         filter_dict: dict[str, Any] = {}
@@ -282,13 +290,31 @@ class RetrievalService:
             )
         except Exception:
             # Audit logging failure must not block the search response
-            logger.warning("Failed to record retrieval audit query event", exc_info=True)
+            record_error("retrieval", "exception")
+            logger.warning(
+                "Failed to record retrieval audit query event",
+                exc_info=True,
+                extra={
+                    "stage": "retrieval.audit",
+                    "dependency": "database",
+                    "status": "failed",
+                    "error_code": "RETRIEVAL_AUDIT_FAILED",
+                },
+            )
 
         logger.info(
             "Retrieval search completed in %.2f ms (results=%d, method=%s)",
             elapsed_ms,
             len(reranked_results),
-            method.value if isinstance(method, RetrievalMethod) else str(method),
+            method_label,
+            extra={
+                "stage": "retrieval.total",
+                "dependency": "rag",
+                "status": "succeeded",
+                "latency_ms": rounded_elapsed_ms,
+                "method": method_label,
+                "result_count": len(reranked_results),
+            },
         )
 
         return RetrievalServiceResponse(

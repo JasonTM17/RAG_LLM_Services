@@ -132,7 +132,13 @@ async def _run_check(check: DependencyCheck) -> str:
         error_type = type(exc).__name__
         logger.warning(
             "health check failed",
-            extra={"check": check.name, "error_type": error_type},
+            extra={
+                "stage": "health.ready",
+                "dependency": check.name,
+                "status": "failed",
+                "error_code": "HEALTH_CHECK_FAILED",
+                "error_type": error_type,
+            },
         )
         return "error"
     return "ok"

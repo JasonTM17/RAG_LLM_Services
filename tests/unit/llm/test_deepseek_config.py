@@ -119,3 +119,56 @@ async def test_deepseek_responses_complete_posts_to_responses_without_v1() -> No
     assert response.usage.estimated_cost_usd == 0.0001275
     assert len(requests) == 1
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_deepseek_structured_response_preserves_usage_metadata() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content.decode("utf-8"))
+        assert payload["text"]["format"]["type"] == "json_object"
+        return httpx.Response(
+            200,
+            json={
+                "id": "resp_structured_1",
+                "model": "deepseek-v4-flash",
+                "status": "completed",
+                "output_text": json.dumps({"answer": "Structured answer [S1]."}),
+                "usage": {
+                    "input_tokens": 80,
+                    "input_tokens_details": {"cached_tokens": 10},
+                    "output_tokens": 12,
+                    "total_tokens": 92,
+                },
+            },
+        )
+
+    client = httpx.AsyncClient(
+        base_url="https://api.deepseek.com",
+        transport=httpx.MockTransport(handler),
+    )
+    provider = DeepSeekProvider(
+        api_key="test-key",
+        http_client=client,
+        retry_backoff_seconds=0.0,
+        pricing=TokenPricing(
+            input_cache_miss_usd_per_1m=1.0,
+            input_cache_hit_usd_per_1m=0.5,
+            output_usd_per_1m=2.0,
+        ),
+    )
+
+    response = await provider.structured_response(
+        LLMRequest(
+            messages=(LLMMessage(role=MessageRole.USER, content="return json"),),
+            idempotency_key="msg-structured-1",
+        ),
+        schema={"type": "object"},
+    )
+
+    assert response.output == {"answer": "Structured answer [S1]."}
+    assert response.provider == "deepseek"
+    assert response.usage.input_tokens == 80
+    assert response.usage.cached_input_tokens == 10
+    assert response.usage.output_tokens == 12
+    assert response.usage.estimated_cost_usd == 0.000099
+    await client.aclose()

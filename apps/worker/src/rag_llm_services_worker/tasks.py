@@ -32,6 +32,7 @@ from rag_llm_services_shared.errors import NotFoundError, ValidationError
 from rag_llm_services_worker.main import celery_app
 from rag_llm_services_worker.main import settings as celery_settings
 from rag_llm_services_worker.metrics import (
+    record_error,
     record_worker_ingestion_duration,
     record_worker_ingestion_job,
 )
@@ -222,7 +223,16 @@ async def run_ingestion_task_once(
                 )
             except Exception:
                 await session.rollback()
-                logger.exception("Failed to persist ingestion worker failure state")
+                record_error("worker", "exception")
+                logger.exception(
+                    "Failed to persist ingestion worker failure state",
+                    extra={
+                        "stage": "worker.ingestion.persist_failure",
+                        "dependency": "database",
+                        "status": "failed",
+                        "error_code": "WORKER_FAILURE_STATE_FAILED",
+                    },
+                )
             task_result = _result_from_payload(
                 payload,
                 status=DocumentStatus.FAILED.value if final_attempt else RETRYING_STATUS,
@@ -238,6 +248,20 @@ async def run_ingestion_task_once(
         metric_status = "failed"
     record_worker_ingestion_job(metric_status)
     record_worker_ingestion_duration(metric_status, elapsed_ms)
+    if metric_status in {"failed", "retrying"}:
+        record_error("worker", "exception")
+    logger.info(
+        "Ingestion worker job completed",
+        extra={
+            "stage": "worker.ingestion",
+            "dependency": "celery",
+            "status": metric_status,
+            "latency_ms": elapsed_ms,
+            "chunk_count": task_result.chunk_count,
+            "attempt_count": task_result.attempt_count,
+            "error_code": "WORKER_INGESTION_FAILED" if metric_status == "failed" else None,
+        },
+    )
 
     if (
         task_result.status in {DocumentStatus.FAILED.value, RETRYING_STATUS}

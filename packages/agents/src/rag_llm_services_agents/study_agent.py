@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -17,6 +19,9 @@ from rag_llm_services_agents.prompts import STUDY_INSTRUCTIONS, build_study_user
 from rag_llm_services_agents.tools import KnowledgeBaseTools, SearchKnowledgeBaseInput, SourceChunk
 from rag_llm_services_llm.base import LLMMessage, LLMProvider, LLMRequest, MessageRole
 from rag_llm_services_llm.errors import LLMProviderError
+from rag_llm_services_observability.metrics import record_error, record_llm_request
+
+logger = logging.getLogger(__name__)
 
 StudyOutputT = TypeVar("StudyOutputT", bound=BaseModel)
 
@@ -227,17 +232,61 @@ class StudyAgent:
                 ),
             ),
         )
-        raw_output = await self._llm_provider.structured(
-            LLMRequest(
-                messages=messages,
-                max_output_tokens=max_output_tokens,
-                temperature=0.2,
-                idempotency_key=idempotency_key,
-            ),
-            schema=output_type.model_json_schema(),
+        capabilities = self._llm_provider.capabilities()
+        provider_started = time.perf_counter()
+        try:
+            structured_response = await self._llm_provider.structured_response(
+                LLMRequest(
+                    messages=messages,
+                    max_output_tokens=max_output_tokens,
+                    temperature=0.2,
+                    idempotency_key=idempotency_key,
+                ),
+                schema=output_type.model_json_schema(),
+            )
+        except Exception:
+            elapsed_ms = round((time.perf_counter() - provider_started) * 1000.0, 2)
+            record_llm_request(
+                provider=capabilities.provider,
+                status="failed",
+                latency_ms=elapsed_ms,
+            )
+            record_error("llm", "exception")
+            logger.exception(
+                "LLM structured request failed",
+                extra={
+                    "stage": "llm.structured",
+                    "dependency": "llm_provider",
+                    "provider": capabilities.provider,
+                    "model": capabilities.model,
+                    "status": "failed",
+                    "latency_ms": elapsed_ms,
+                    "error_code": "LLM_STRUCTURED_REQUEST_FAILED",
+                    "workflow": task,
+                },
+            )
+            raise
+        elapsed_ms = round((time.perf_counter() - provider_started) * 1000.0, 2)
+        record_llm_request(
+            provider=structured_response.provider,
+            status="succeeded",
+            latency_ms=structured_response.latency_ms or elapsed_ms,
+            usage=structured_response.usage,
+        )
+        logger.info(
+            "LLM structured request completed",
+            extra={
+                "stage": "llm.structured",
+                "dependency": "llm_provider",
+                "provider": structured_response.provider,
+                "model": structured_response.model,
+                "status": "succeeded",
+                "latency_ms": structured_response.latency_ms or elapsed_ms,
+                "workflow": task,
+            },
         )
         try:
-            output = output_type.model_validate(raw_output)
+            output = output_type.model_validate(structured_response.output)
         except PydanticValidationError as exc:
             raise LLMProviderError(
                 "LLM provider returned malformed study output",
@@ -248,12 +297,11 @@ class StudyAgent:
         self._validate_output_citations(
             output, available_source_ids=[s.source_id for s in tool_output.sources]
         )
-        capabilities = self._llm_provider.capabilities()
         return StudyAgentResult(
             output=output,
             retrieved_sources=tool_output.sources,
-            provider=capabilities.provider,
-            model=capabilities.model,
+            provider=structured_response.provider,
+            model=structured_response.model,
         )
 
     def _validate_output_citations(

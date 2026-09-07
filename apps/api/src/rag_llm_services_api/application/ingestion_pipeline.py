@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -16,6 +17,13 @@ from rag_llm_services_api.infrastructure.repositories.chunks import (
 from rag_llm_services_api.infrastructure.repositories.documents import DocumentRepository
 from rag_llm_services_api.infrastructure.storage.base import ObjectStoragePort
 from rag_llm_services_embeddings.base import EmbeddingProvider
+from rag_llm_services_observability.metrics import (
+    record_embedding_duration,
+    record_error,
+    record_ingestion_chunks,
+    record_ingestion_document,
+    record_ingestion_duration,
+)
 from rag_llm_services_rag.chunking import Chunker
 from rag_llm_services_rag.normalization import TextNormalizer
 from rag_llm_services_rag.parsers.base import ParsedDocument
@@ -121,6 +129,7 @@ class IngestionPipeline:
         if target_version is None:
             raise NotFoundError(f"No valid version found for document '{document_id}'")
 
+        started = time.perf_counter()
         actual_version_id = target_version.id
         storage_key = target_version.storage_key
         mime_type = target_version.mime_type
@@ -180,7 +189,13 @@ class IngestionPipeline:
             if chunks:
                 # 9. Generate dense embeddings in batches
                 texts_to_embed = [c.content for c in chunks]
-                embeddings = await self._embeddings.embed_documents(texts_to_embed)
+                embedding_started = time.perf_counter()
+                try:
+                    embeddings = await self._embeddings.embed_documents(texts_to_embed)
+                finally:
+                    record_embedding_duration(
+                        round((time.perf_counter() - embedding_started) * 1000.0, 2)
+                    )
 
                 # 10. Prepare ChunkCreateData
                 chunk_data_list: list[ChunkCreateData] = []
@@ -220,17 +235,48 @@ class IngestionPipeline:
                 IngestionJobStatus.INDEXED,
                 error_message=None,
             )
+            elapsed_ms = round((time.perf_counter() - started) * 1000.0, 2)
+            chunk_count = len(chunk_models)
+            record_ingestion_document(DocumentStatus.INDEXED.value)
+            record_ingestion_duration(DocumentStatus.INDEXED.value, elapsed_ms)
+            record_ingestion_chunks(DocumentStatus.INDEXED.value, chunk_count)
+            logger.info(
+                "Ingestion completed",
+                extra={
+                    "stage": "ingestion.total",
+                    "dependency": "ingestion_pipeline",
+                    "status": "indexed",
+                    "latency_ms": elapsed_ms,
+                    "chunk_count": chunk_count,
+                },
+            )
 
             return IngestionResult(
                 document_id=document_id,
                 version_id=actual_version_id,
-                chunk_count=len(chunk_models),
+                chunk_count=chunk_count,
                 status=DocumentStatus.INDEXED,
             )
 
         except Exception as exc:
             err_msg = safe_ingestion_error(exc)
-            logger.exception("Ingestion failed for document %s: %s", document_id, err_msg)
+            elapsed_ms = round((time.perf_counter() - started) * 1000.0, 2)
+            record_error("ingestion", "exception")
+            record_ingestion_document(DocumentStatus.FAILED.value)
+            record_ingestion_duration(DocumentStatus.FAILED.value, elapsed_ms)
+            record_ingestion_chunks(DocumentStatus.FAILED.value, 0)
+            logger.exception(
+                "Ingestion failed",
+                extra={
+                    "stage": "ingestion.total",
+                    "dependency": "ingestion_pipeline",
+                    "status": "failed",
+                    "latency_ms": elapsed_ms,
+                    "error_code": "INGESTION_FAILED",
+                    "error_type": type(exc).__name__,
+                    "safe_error": err_msg,
+                },
+            )
             # Record failure state in database safely
             try:
                 session = getattr(self._doc_repo, "_session", None)

@@ -11,6 +11,12 @@ from rag_llm_services_agents.citations import CitationValidationError
 from rag_llm_services_agents.study_agent import StudyAgent, StudyDifficulty
 from rag_llm_services_agents.tools import KnowledgeBaseTools
 from rag_llm_services_llm.deepseek import FakeLLMProvider
+from rag_llm_services_observability.metrics import (
+    RAG_LLM_INPUT_TOKENS_TOTAL,
+    RAG_LLM_OUTPUT_TOKENS_TOTAL,
+    RAG_LLM_REQUESTS_TOTAL,
+    reset_all_metrics,
+)
 from rag_llm_services_rag.retrieval.types import CitedChunk, ContextBundle
 
 
@@ -74,3 +80,32 @@ async def test_study_agent_rejects_invented_citations_inside_text_fields() -> No
             question_count=1,
             difficulty=StudyDifficulty.INTERMEDIATE,
         )
+
+
+@pytest.mark.asyncio
+async def test_study_agent_records_structured_llm_usage_metrics() -> None:
+    reset_all_metrics()
+    agent = StudyAgent(
+        tools=KnowledgeBaseTools(
+            retrieval_service=FakeRetrievalPort(),
+            document_catalog=FakeDocumentCatalog(),
+        ),
+        llm_provider=FakeLLMProvider(),
+    )
+
+    try:
+        await agent.quiz(
+            owner_id=uuid.uuid4(),
+            topic="study workflows",
+            question_count=1,
+            difficulty=StudyDifficulty.INTERMEDIATE,
+        )
+
+        assert (
+            RAG_LLM_REQUESTS_TOTAL.snapshot()[(("provider", "fake"), ("status", "succeeded"))]
+            == 1.0
+        )
+        assert RAG_LLM_INPUT_TOKENS_TOTAL.snapshot()[(("provider", "fake"),)] > 0
+        assert RAG_LLM_OUTPUT_TOKENS_TOTAL.snapshot()[(("provider", "fake"),)] > 0
+    finally:
+        reset_all_metrics()

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -25,7 +27,10 @@ from rag_llm_services_llm.base import (
     MessageRole,
 )
 from rag_llm_services_llm.usage import LLMUsage
+from rag_llm_services_observability.metrics import record_error, record_llm_request
 from rag_llm_services_rag.retrieval.types import CitedChunk, ContextBundle, RetrievalFilter
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """You answer learning questions using only the provided source context.
 If the sources do not contain enough evidence, say so briefly.
@@ -139,7 +144,44 @@ class ChatApplicationService:
             max_output_tokens=max_output_tokens,
             idempotency_key=str(user_message.id),
         )
-        llm_response = await self._llm_provider.complete(request)
+        provider_started = time.perf_counter()
+        try:
+            llm_response = await self._llm_provider.complete(request)
+        except Exception:
+            elapsed_ms = round((time.perf_counter() - provider_started) * 1000.0, 2)
+            provider = self._provider_name()
+            record_llm_request(provider=provider, status="failed", latency_ms=elapsed_ms)
+            record_error("llm", "exception")
+            logger.exception(
+                "LLM request failed",
+                extra={
+                    "stage": "llm.complete",
+                    "dependency": "llm_provider",
+                    "provider": provider,
+                    "model": self._provider_model(),
+                    "status": "failed",
+                    "latency_ms": elapsed_ms,
+                    "error_code": "LLM_REQUEST_FAILED",
+                },
+            )
+            raise
+        record_llm_request(
+            provider=llm_response.provider,
+            status="succeeded",
+            latency_ms=llm_response.latency_ms,
+            usage=llm_response.usage,
+        )
+        logger.info(
+            "LLM request completed",
+            extra={
+                "stage": "llm.complete",
+                "dependency": "llm_provider",
+                "provider": llm_response.provider,
+                "model": llm_response.model,
+                "status": "succeeded",
+                "latency_ms": llm_response.latency_ms,
+            },
+        )
         assistant_message = await self._persist_assistant_response(
             owner_id=owner_id,
             conversation_id=conversation_id,
@@ -194,36 +236,96 @@ class ChatApplicationService:
             idempotency_key=str(user_message.id),
         )
         answer_parts: list[str] = []
-        async for event in self._llm_provider.stream(request):
-            if event.delta:
-                answer_parts.append(event.delta)
+        provider_started = time.perf_counter()
+        try:
+            async for event in self._llm_provider.stream(request):
+                if event.delta:
+                    answer_parts.append(event.delta)
+                    yield ChatStreamChunk(
+                        event=event.event_type,
+                        delta=event.delta,
+                        conversation_id=conversation_id,
+                    )
+                    continue
+                if event.response is not None:
+                    response = _response_with_content(event.response, "".join(answer_parts).strip())
+                    record_llm_request(
+                        provider=response.provider,
+                        status="succeeded",
+                        latency_ms=response.latency_ms,
+                        usage=response.usage,
+                    )
+                    logger.info(
+                        "LLM stream completed",
+                        extra={
+                            "stage": "llm.stream",
+                            "dependency": "llm_provider",
+                            "provider": response.provider,
+                            "model": response.model,
+                            "status": "succeeded",
+                            "latency_ms": response.latency_ms,
+                        },
+                    )
+                    assistant_message = await self._persist_assistant_response(
+                        owner_id=owner_id,
+                        conversation_id=conversation_id,
+                        response=response,
+                        context_bundle=context_bundle,
+                    )
+                    yield ChatStreamChunk(
+                        event=event.event_type,
+                        conversation_id=conversation_id,
+                        message_id=assistant_message.id,
+                        usage=response.usage,
+                    )
+                    continue
+                if event.error_code:
+                    elapsed_ms = round((time.perf_counter() - provider_started) * 1000.0, 2)
+                    provider = self._provider_name()
+                    record_llm_request(provider=provider, status="failed", latency_ms=elapsed_ms)
+                    record_error("llm", "upstream_unavailable")
+                    logger.warning(
+                        "LLM stream failed",
+                        extra={
+                            "stage": "llm.stream",
+                            "dependency": "llm_provider",
+                            "provider": provider,
+                            "model": self._provider_model(),
+                            "status": "failed",
+                            "latency_ms": elapsed_ms,
+                            "error_code": event.error_code,
+                        },
+                    )
                 yield ChatStreamChunk(
                     event=event.event_type,
-                    delta=event.delta,
                     conversation_id=conversation_id,
+                    error_code=event.error_code,
+                    error_message=event.error_message,
                 )
-                continue
-            if event.response is not None:
-                response = _response_with_content(event.response, "".join(answer_parts).strip())
-                assistant_message = await self._persist_assistant_response(
-                    owner_id=owner_id,
-                    conversation_id=conversation_id,
-                    response=response,
-                    context_bundle=context_bundle,
-                )
-                yield ChatStreamChunk(
-                    event=event.event_type,
-                    conversation_id=conversation_id,
-                    message_id=assistant_message.id,
-                    usage=response.usage,
-                )
-                continue
-            yield ChatStreamChunk(
-                event=event.event_type,
-                conversation_id=conversation_id,
-                error_code=event.error_code,
-                error_message=event.error_message,
+        except Exception:
+            elapsed_ms = round((time.perf_counter() - provider_started) * 1000.0, 2)
+            provider = self._provider_name()
+            record_llm_request(provider=provider, status="failed", latency_ms=elapsed_ms)
+            record_error("llm", "exception")
+            logger.exception(
+                "LLM stream failed",
+                extra={
+                    "stage": "llm.stream",
+                    "dependency": "llm_provider",
+                    "provider": provider,
+                    "model": self._provider_model(),
+                    "status": "failed",
+                    "latency_ms": elapsed_ms,
+                    "error_code": "LLM_STREAM_FAILED",
+                },
             )
+            raise
+
+    def _provider_name(self) -> str:
+        return self._llm_provider.capabilities().provider
+
+    def _provider_model(self) -> str:
+        return self._llm_provider.capabilities().model
 
     async def _resolve_conversation(
         self,

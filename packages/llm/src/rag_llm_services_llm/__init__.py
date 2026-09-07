@@ -6,6 +6,7 @@ from rag_llm_services_llm.base import (
     LLMRequest,
     LLMResponse,
     LLMStreamEvent,
+    LLMStructuredResponse,
     MessageRole,
     ProviderCapabilities,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "LLMRequest",
     "LLMResponse",
     "LLMStreamEvent",
+    "LLMStructuredResponse",
     "LLMUsage",
     "MessageRole",
     "ProviderCapabilities",

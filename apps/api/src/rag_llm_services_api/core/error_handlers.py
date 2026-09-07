@@ -30,6 +30,14 @@ _STATUS_CODE_TO_CODE = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}
 _ExceptionHandler = Callable[[Request, Exception], Response | Awaitable[Response]]
 
 
+def _safe_route(request: Request) -> str:
+    """Return a matched route template for logs, never a raw user path."""
+    scope = getattr(request, "scope", {})
+    route = scope.get("route") if isinstance(scope, dict) else None
+    path = getattr(route, "path", None)
+    return path if isinstance(path, str) else "unmatched"
+
+
 def _error_response(
     status_code: int,
     code: str,
@@ -54,10 +62,16 @@ def _error_response(
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     """Map application errors onto their declared status and machine code."""
     log = logger.warning if exc.status_code < 500 else logger.error
-    path = getattr(getattr(request, "url", None), "path", "<unknown>")
     log(
         "Application error",
-        extra={"code": exc.code, "status": exc.status_code, "path": path},
+        extra={
+            "stage": "http.error",
+            "dependency": "api",
+            "status": "failed",
+            "status_code": exc.status_code,
+            "route": _safe_route(request),
+            "error_code": exc.code,
+        },
     )
     return _error_response(exc.status_code, exc.code, exc.message, request=request)
 
@@ -68,10 +82,17 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     Pydantic error details (locations, messages, input values) are never
     echoed to the client.
     """
-    path = getattr(getattr(request, "url", None), "path", "<unknown>")
     logger.warning(
         "Request validation failed",
-        extra={"path": path, "errors_count": len(exc.errors())},
+        extra={
+            "stage": "http.validation",
+            "dependency": "api",
+            "status": "failed",
+            "status_code": 422,
+            "route": _safe_route(request),
+            "error_code": "VALIDATION_ERROR",
+            "errors_count": len(exc.errors()),
+        },
     )
     return _error_response(422, "VALIDATION_ERROR", "Request validation failed", request=request)
 
@@ -80,10 +101,16 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
     """Map Starlette HTTP exceptions onto stable machine codes."""
     code = _STATUS_CODE_TO_CODE.get(exc.status_code, f"HTTP_{exc.status_code}")
     message = exc.detail if isinstance(exc.detail, str) else "Request failed"
-    path = getattr(getattr(request, "url", None), "path", "<unknown>")
     logger.warning(
         "HTTP exception",
-        extra={"status": exc.status_code, "path": path},
+        extra={
+            "stage": "http.exception",
+            "dependency": "api",
+            "status": "failed",
+            "status_code": exc.status_code,
+            "route": _safe_route(request),
+            "error_code": code,
+        },
     )
     return _error_response(exc.status_code, code, message, request=request)
 
@@ -114,9 +141,17 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     if req_id and get_request_id() is None:
         token = set_request_id(req_id)
     try:
-        url = getattr(request, "url", None)
-        path = getattr(url, "path", "<unknown>") if url is not None else "<unknown>"
-        logger.exception("Unhandled exception", extra={"path": path})
+        logger.exception(
+            "Unhandled exception",
+            extra={
+                "stage": "http.unhandled",
+                "dependency": "api",
+                "status": "failed",
+                "status_code": 500,
+                "route": _safe_route(request),
+                "error_code": "INTERNAL_ERROR",
+            },
+        )
     finally:
         if token is not None:
             request_id_var.reset(token)

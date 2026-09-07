@@ -26,7 +26,7 @@ RetrievalService
   │
   ├──► RagQueryRepository (records audit event in rag_queries table)
   │
-  ├──► Retrieval metrics (query counter and stage latency histogram)
+  ├──► Retrieval metrics (query counter, stage latency, per-channel latency, chunk count)
   │
   ▼
 RetrievalSearchResponse (JSON with ranked hits and bounded ContextBundle)
@@ -96,8 +96,9 @@ Primary files:
 
 - Persists retrieval query events to `rag_queries` table.
 - Records total latency, per-stage `stage_latencies_ms`, result count, selected chunk IDs, and filters.
-- Records `rag_retrieval_query_total` by bounded `method` label.
-- Records `rag_retrieval_stage_latency_ms` by bounded `stage` label (`normalize`, `vector`, `keyword`, `fusion`, `rerank`, `context`, `total`).
+- Records `rag_queries_total` by bounded `method` label.
+- Records `rag_retrieval_duration_seconds` by bounded `stage` label (`normalize`, `vector`, `keyword`, `fusion`, `rerank`, `context`, `total`).
+- Records `rag_vector_search_duration_seconds`, `rag_keyword_search_duration_seconds`, `rag_rerank_duration_seconds`, and `rag_retrieved_chunks` for Prometheus scrape.
 - Avoids high-cardinality metric labels; labels do not contain query text, owner IDs, request IDs, document IDs, chunk IDs, or knowledge-base IDs.
 
 ## API Endpoints

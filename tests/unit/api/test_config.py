@@ -63,6 +63,8 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.queue.ingestion_queue_name == "ingestion"
     assert settings.queue.ingestion_task_max_retries == 3
     assert settings.queue.visibility_timeout_seconds == 3600
+    assert settings.queue.worker_pool == "threads"
+    assert settings.queue.worker_concurrency == 4
     assert settings.n8n.host == "localhost"
     assert settings.n8n.image == "docker.n8n.io/n8nio/n8n:2.37.11"
     assert settings.n8n.port == 5678
@@ -73,6 +75,22 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.n8n.notification_webhook_url is None
     assert settings.n8n.generic_timezone == "Asia/Bangkok"
     assert settings.n8n.rag_api_base_url == "http://host.docker.internal:8000/api/v1"
+    assert settings.observability.worker_metrics_enabled is False
+    assert settings.observability.worker_metrics_host == "0.0.0.0"
+    assert settings.observability.worker_metrics_port == 9108
+    assert settings.observability.worker_metrics_host_port == 9108
+    assert settings.observability.prometheus_image == "prom/prometheus:v2.55.1"
+    assert settings.observability.prometheus_port == 9090
+    assert settings.observability.prometheus_retention_time == "15d"
+    assert (
+        settings.observability.postgres_exporter_image
+        == "quay.io/prometheuscommunity/postgres-exporter:v0.15.0"
+    )
+    assert settings.observability.postgres_exporter_port == 9187
+    assert settings.observability.redis_exporter_image == "oliver006/redis_exporter:v1.62.0"
+    assert settings.observability.redis_exporter_port == 9121
+    assert settings.observability.cadvisor_image == "gcr.io/cadvisor/cadvisor:v0.49.1"
+    assert settings.observability.cadvisor_port == 8080
 
 
 def test_retrieval_defaults_are_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -91,6 +109,15 @@ def test_retrieval_defaults_are_configurable(monkeypatch: pytest.MonkeyPatch) ->
     assert settings.rag.rrf_k == 42
     assert settings.rag.rrf_vector_weight == 1.5
     assert settings.rag.rrf_keyword_weight == 0.7
+
+
+def test_worker_pool_rejects_prefork_for_in_process_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WORKER_POOL", "prefork")
+
+    with pytest.raises(ValidationError, match="WORKER_POOL"):
+        Settings(_env_file=None)
 
 
 def test_production_with_placeholder_secret_raises_and_hides_value(

@@ -16,6 +16,7 @@ from rag_llm_services_llm.base import (
     LLMRequest,
     LLMResponse,
     LLMStreamEvent,
+    LLMStructuredResponse,
     ProviderCapabilities,
 )
 from rag_llm_services_llm.costs import CostCalculator, TokenPricing
@@ -74,8 +75,46 @@ class FakeLLMProvider:
         request: LLMRequest,
         schema: Mapping[str, Any],
     ) -> Mapping[str, Any]:
+        return (await self.structured_response(request, schema)).output
+
+    async def structured_response(
+        self,
+        request: LLMRequest,
+        schema: Mapping[str, Any],
+    ) -> LLMStructuredResponse:
+        output: Mapping[str, Any]
         if self._structured_payload is not None:
-            return self._structured_payload
+            output = self._structured_payload
+        else:
+            output = self._structured_output(request, schema)
+        usage = self._usage_for(request, output)
+        return LLMStructuredResponse(
+            output=output,
+            model=request.model or self._model,
+            provider=self.provider,
+            usage=usage,
+            latency_ms=0.0,
+            raw_response_id="fake-structured-response",
+            finish_reason="stop",
+        )
+
+    def _usage_for(self, request: LLMRequest, output: Mapping[str, Any]) -> LLMUsage:
+        output_text = json.dumps(output, ensure_ascii=False, sort_keys=True)
+        input_tokens = sum(len(message.content.split()) for message in request.messages)
+        output_tokens = len(output_text.split())
+        return LLMUsage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cached_input_tokens=0,
+            total_tokens=input_tokens + output_tokens,
+            estimated_cost_usd=0.0,
+        )
+
+    def _structured_output(
+        self,
+        request: LLMRequest,
+        schema: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
         topic = _extract_prompt_field(request, "Topic") or "Mock topic"
         difficulty = _extract_prompt_field(request, "Difficulty") or "intermediate"
         count = _extract_prompt_int(request, "Requested count") or 1
@@ -222,6 +261,13 @@ class DeepSeekProvider:
         request: LLMRequest,
         schema: Mapping[str, Any],
     ) -> Mapping[str, Any]:
+        return (await self.structured_response(request, schema)).output
+
+    async def structured_response(
+        self,
+        request: LLMRequest,
+        schema: Mapping[str, Any],
+    ) -> LLMStructuredResponse:
         structured_request = LLMRequest(
             messages=request.messages,
             model=request.model,
@@ -245,7 +291,16 @@ class DeepSeekProvider:
                 code="LLM_MALFORMED_STRUCTURED_OUTPUT",
                 status_code=502,
             )
-        return parsed
+        return LLMStructuredResponse(
+            output=parsed,
+            model=response.model,
+            provider=response.provider,
+            usage=response.usage,
+            latency_ms=response.latency_ms,
+            retry_count=response.retry_count,
+            raw_response_id=response.raw_response_id,
+            finish_reason=response.finish_reason,
+        )
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[LLMStreamEvent]:
         if self._api_mode != "responses":

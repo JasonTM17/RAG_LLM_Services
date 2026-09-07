@@ -35,6 +35,8 @@ def test_build_celery_app_sets_json_routing_and_visibility_timeout() -> None:
     assert app.conf.task_acks_late is True
     assert app.conf.task_reject_on_worker_lost is True
     assert app.conf.worker_prefetch_multiplier == 1
+    assert app.conf.worker_pool == "threads"
+    assert app.conf.worker_concurrency == 4
     assert app.conf.broker_transport_options["visibility_timeout"] == 120
     assert app.conf.task_routes[INGESTION_TASK_NAME]["queue"] == "ingestion_test"
 
