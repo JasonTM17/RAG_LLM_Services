@@ -17,13 +17,18 @@ dependencies = [
     "minio>=7.2",
     "python-multipart>=0.0.12",
     "puremagic>=1.28",
+    "pgvector>=0.3.6",
     "rag-llm-services-shared",
     "rag-llm-services-observability",
+    "rag-llm-services-rag",
+    "rag-llm-services-embeddings",
 ]
 
 [tool.uv.sources]
 rag-llm-services-shared = { workspace = true }
 rag-llm-services-observability = { workspace = true }
+rag-llm-services-rag = { workspace = true }
+rag-llm-services-embeddings = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -10,6 +10,8 @@ dependencies = [
     "rag-llm-services-api",
     "rag-llm-services-shared",
     "rag-llm-services-observability",
+    "rag-llm-services-rag",
+    "rag-llm-services-embeddings",
 ]
 
 [dependency-groups]
@@ -17,12 +19,20 @@ dev = ["pytest>=8", "pytest-asyncio>=1", "ruff>=0.13", "mypy>=1.18", "aiosqlite>
 
 
 [tool.uv.workspace]
-members = ["apps/api", "packages/shared", "packages/observability"]
+members = [
+    "apps/api",
+    "packages/shared",
+    "packages/observability",
+    "packages/rag",
+    "packages/embeddings",
+]
 
 [tool.uv.sources]
 rag-llm-services-api = { workspace = true }
 rag-llm-services-shared = { workspace = true }
 rag-llm-services-observability = { workspace = true }
+rag-llm-services-rag = { workspace = true }
+rag-llm-services-embeddings = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -32,7 +42,14 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-src = ["apps/api/src", "packages/shared/src", "packages/observability/src", "tests"]
+src = [
+    "apps/api/src",
+    "packages/shared/src",
+    "packages/observability/src",
+    "packages/rag/src",
+    "packages/embeddings/src",
+    "tests",
+]
 
 [tool.ruff.lint.per-file-ignores]
 # Depends() in route defaults is the FastAPI dependency-injection idiom.

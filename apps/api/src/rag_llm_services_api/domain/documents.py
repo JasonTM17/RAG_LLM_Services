@@ -27,6 +27,7 @@ class DocumentStatus(StrEnum):
     """Stable lifecycle statuses for documents."""
 
     UPLOADED = "UPLOADED"
+    PROCESSING = "PROCESSING"
     PARSING = "PARSING"
     CHUNKING = "CHUNKING"
     EMBEDDING = "EMBEDDING"
@@ -38,6 +39,7 @@ class IngestionJobStatus(StrEnum):
     """Stable lifecycle statuses for ingestion jobs."""
 
     PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
     PARSING = "PARSING"
     CHUNKING = "CHUNKING"
     EMBEDDING = "EMBEDDING"

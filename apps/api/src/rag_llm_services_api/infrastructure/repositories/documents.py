@@ -190,3 +190,20 @@ class DocumentRepository:
         await self._session.flush()
         await self._session.refresh(doc)
         return doc
+
+    async def update_ingestion_job_status(
+        self,
+        owner_id: UUID,
+        job_id: UUID,
+        status: str,
+        error_message: str | None = None,
+    ) -> IngestionJobModel | None:
+        """Update an ingestion job's status and optional error message."""
+        job = await self.get_ingestion_job(owner_id, job_id)
+        if job is None:
+            return None
+        job.status = status
+        job.error_message = error_message
+        await self._session.flush()
+        await self._session.refresh(job)
+        return job
