@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from typing import BinaryIO
 from uuid import UUID
 
+import docx
 import pytest
 from pypdf import PdfWriter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -329,3 +330,119 @@ async def test_ingestion_tenant_isolation(pipeline_env) -> None:
     # Owner B attempting to ingest Owner A's document must fail with NotFoundError
     with pytest.raises(NotFoundError):
         await pipeline.ingest_document(owner_id=owner_b, document_id=doc.id, version_id=version.id)
+
+
+async def test_ingest_docx_document_end_to_end(pipeline_env) -> None:
+    session, storage, doc_repo, chunk_repo, pipeline, owner_a, _ = pipeline_env
+    kb_repo = KnowledgeBaseRepository(session)
+
+    kb = await kb_repo.create(owner_id=owner_a, name="DOCX KB")
+
+    # Generate test DOCX package in-memory
+    doc_pkg = docx.Document()
+    doc_pkg.add_heading("Tài liệu đặc tả hệ thống", level=1)
+    doc_pkg.add_paragraph("Đây là nội dung phần mở đầu về hệ thống phân tích ngữ nghĩa.")
+    doc_pkg.add_heading("Cấu trúc lưu trữ", level=2)
+    doc_pkg.add_paragraph("Mô hình dữ liệu lưu trữ vector 1024 chiều vào PostgreSQL pgvector.")
+
+    table = doc_pkg.add_table(rows=2, cols=2)
+    table.rows[0].cells[0].text = "Khóa chính"
+    table.rows[0].cells[1].text = "Mô tả"
+    table.rows[1].cells[0].text = "UUID"
+    table.rows[1].cells[1].text = "Định danh duy nhất cho chunk"
+
+    buf = io.BytesIO()
+    doc_pkg.save(buf)
+    docx_bytes = buf.getvalue()
+
+    docx_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    storage_key = f"knowledge_bases/{kb.id}/docs/spec.docx"
+    await storage.put_object(storage_key, docx_bytes, len(docx_bytes), docx_mime)
+
+    doc, version, job = await doc_repo.create_document_with_version_and_job(
+        owner_id=owner_a,
+        knowledge_base_id=kb.id,
+        filename="spec.docx",
+        content_type=docx_mime,
+        file_size_bytes=len(docx_bytes),
+        checksum_sha256="docx-checksum-123",
+        storage_key=storage_key,
+    )
+    doc_id = doc.id
+    ver_id = version.id
+    job_id = job.id
+    await session.commit()
+
+    res = await pipeline.ingest_document(owner_a, doc_id, ver_id, job_id)
+    await session.commit()
+
+    assert res.status == DocumentStatus.INDEXED
+    assert res.chunk_count >= 2
+
+    chunks = await chunk_repo.get_chunks_by_version(owner_a, ver_id)
+    assert len(chunks) == res.chunk_count
+
+    # Verify heading and metadata propagation
+    section_headers = [c.metadata_json.get("section_header") for c in chunks]
+    assert "Tài liệu đặc tả hệ thống" in section_headers or any(
+        "đặc tả" in str(h) for h in section_headers if h
+    )
+
+
+async def test_ingest_pdf_with_text_and_pages_end_to_end(pipeline_env) -> None:
+    session, storage, doc_repo, chunk_repo, pipeline, owner_a, _ = pipeline_env
+    kb_repo = KnowledgeBaseRepository(session)
+
+    kb = await kb_repo.create(owner_id=owner_a, name="PDF Text KB")
+
+    pdf_bytes = (
+        b"%PDF-1.4\n"
+        b"1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj\n"
+        b"2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>> endobj\n"
+        b"3 0 obj <</Type /Page /Parent 2 0 R /Resources 4 0 R /MediaBox [0 0 500 800] /Contents 5 0 R>> endobj\n"
+        b"4 0 obj <</Font <</F1 <</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>>>>> endobj\n"
+        b"5 0 obj <</Length 50>> stream\n"
+        b"BT /F1 12 Tf 100 700 Td (Production RAG Ingestion Pipeline) Tj ET\n"
+        b"endstream\n"
+        b"endobj\n"
+        b"xref\n"
+        b"0 6\n"
+        b"0000000000 65535 f \n"
+        b"0000000009 00000 n \n"
+        b"0000000056 00000 n \n"
+        b"0000000111 00000 n \n"
+        b"0000000212 00000 n \n"
+        b"0000000289 00000 n \n"
+        b"trailer <</Size 6 /Root 1 0 R>>\n"
+        b"startxref\n"
+        b"388\n"
+        b"%%EOF\n"
+    )
+
+    storage_key = f"knowledge_bases/{kb.id}/docs/report.pdf"
+    await storage.put_object(storage_key, pdf_bytes, len(pdf_bytes), "application/pdf")
+
+    doc, version, job = await doc_repo.create_document_with_version_and_job(
+        owner_id=owner_a,
+        knowledge_base_id=kb.id,
+        filename="report.pdf",
+        content_type="application/pdf",
+        file_size_bytes=len(pdf_bytes),
+        checksum_sha256="pdf-text-checksum",
+        storage_key=storage_key,
+    )
+    doc_id = doc.id
+    ver_id = version.id
+    job_id = job.id
+    await session.commit()
+
+    res = await pipeline.ingest_document(owner_a, doc_id, ver_id, job_id)
+    await session.commit()
+
+    assert res.status == DocumentStatus.INDEXED
+    assert res.chunk_count == 1
+
+    chunks = await chunk_repo.get_chunks_by_version(owner_a, ver_id)
+    assert len(chunks) == 1
+    assert "Production RAG Ingestion Pipeline" in chunks[0].content
+    assert chunks[0].metadata_json.get("page_number") == 1

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from rag_llm_services_rag.parsers.base import ParsedDocument
+
+_CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u30ff\uac00-\ud7af]")
 
 # Standard hierarchy of text separators for recursive splitting
 DEFAULT_SEPARATORS: list[str] = [
@@ -17,22 +20,41 @@ DEFAULT_SEPARATORS: list[str] = [
     "! ",
     "; ",
     ", ",  # Clauses
+    "。",  # CJK sentence ends
+    "？",
+    "！",
+    "；",
+    "，",  # CJK clauses
+    "、",
     " ",  # Words
     "",  # Character fallback
 ]
 
 
 def default_token_estimator(text: str) -> int:
-    """Estimate token count for multilingual / Vietnamese text.
+    """Estimate token count for multilingual, CJK, and Vietnamese text.
 
-    Uses word count + punctuation estimation, suitable for BGE-M3 / BERT tokenizers
-    without requiring heavy tokenizer library load.
+    Uses word count + punctuation estimation for Latin/Vietnamese text, and character
+    count for non-spaced CJK scripts, suitable for BGE-M3 / BERT tokenizers.
+    Fallback to character estimation for long continuous strings without whitespace.
     """
     if not text.strip():
         return 0
-    words = text.split()
-    # Approx 1.2 to 1.3 subword tokens per word on average for multilingual text
-    return max(1, int(len(words) * 1.25))
+
+    cjk_chars = len(_CJK_RE.findall(text))
+    non_cjk_text = _CJK_RE.sub(" ", text).strip()
+    words = non_cjk_text.split()
+    word_est = max(1, int(len(words) * 1.25)) if words else 0
+
+    char_est = 0
+    if words:
+        max_word_len = max(len(w) for w in words)
+        if max_word_len > 12:
+            char_est = (len(non_cjk_text) + 3) // 4
+    elif not cjk_chars:
+        char_est = (len(text.strip()) + 3) // 4
+
+    return max(1, cjk_chars + word_est, char_est)
 
 
 @dataclass(frozen=True)
@@ -143,6 +165,19 @@ class Chunker:
             )
         return results
 
+    def _split_with_sep(self, text: str, sep: str) -> list[str]:
+        """Split text while preserving the delimiter attached to preceding chunks."""
+        if sep == "":
+            return list(text)
+        parts = text.split(sep)
+        result: list[str] = []
+        for i, p in enumerate(parts):
+            if i < len(parts) - 1:
+                result.append(p + sep)
+            elif p:
+                result.append(p)
+        return result
+
     def _recursive_split(self, text: str, separators: list[str]) -> list[str]:
         """Split text recursively using the most specific separator that fits."""
         final_chunks: list[str] = []
@@ -158,13 +193,13 @@ class Chunker:
                 new_separators = separators[i + 1 :]
                 break
 
-        splits = text.split(separator) if separator != "" else list(text)
+        splits = self._split_with_sep(text, separator)
 
         good_splits: list[str] = []
         for s in splits:
             if not s:
                 continue
-            if self.length_function(s) < self.chunk_size:
+            if self.length_function(s) <= self.chunk_size:
                 good_splits.append(s)
             else:
                 if good_splits:
@@ -192,16 +227,19 @@ class Chunker:
             s_len = self.length_function(s)
 
             if current_len + s_len > self.chunk_size and current_chunk:
-                merged_str = " ".join(current_chunk).strip()
+                merged_str = "".join(current_chunk).strip()
                 if merged_str:
                     merged.append(merged_str)
 
-                # Keep overlap pieces from the tail of current_chunk
+                # Keep overlap pieces from the tail of current_chunk bounded by overlap and chunk_size
                 overlap_chunk: list[str] = []
                 overlap_len = 0
                 for piece in reversed(current_chunk):
                     p_len = self.length_function(piece)
-                    if overlap_len + p_len <= self.chunk_overlap:
+                    if (
+                        overlap_len + p_len <= self.chunk_overlap
+                        and overlap_len + p_len + s_len <= self.chunk_size
+                    ):
                         overlap_chunk.insert(0, piece)
                         overlap_len += p_len
                     else:
@@ -214,7 +252,7 @@ class Chunker:
             current_len += s_len
 
         if current_chunk:
-            final_str = " ".join(current_chunk).strip()
+            final_str = "".join(current_chunk).strip()
             if final_str:
                 merged.append(final_str)
 

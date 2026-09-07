@@ -24,7 +24,7 @@ class BGEM3EmbeddingProvider(EmbeddingProvider):
 
     _lock = threading.Lock()
     _shared_model: Any = None
-    _shared_model_name: str | None = None
+    _shared_model_key: tuple[str, str] | None = None
 
     def __init__(
         self,
@@ -64,10 +64,11 @@ class BGEM3EmbeddingProvider(EmbeddingProvider):
         if self._model_runner is not None:
             return self._model_runner
 
+        cache_key = (self._model_name, self._device)
         with self._lock:
             if (
                 BGEM3EmbeddingProvider._shared_model is not None
-                and BGEM3EmbeddingProvider._shared_model_name == self._model_name
+                and BGEM3EmbeddingProvider._shared_model_key == cache_key
             ):
                 return BGEM3EmbeddingProvider._shared_model
 
@@ -87,7 +88,7 @@ class BGEM3EmbeddingProvider(EmbeddingProvider):
                     device=self._device,
                 )
                 BGEM3EmbeddingProvider._shared_model = model
-                BGEM3EmbeddingProvider._shared_model_name = self._model_name
+                BGEM3EmbeddingProvider._shared_model_key = cache_key
                 return model
             except ImportError:
                 pass
@@ -100,7 +101,7 @@ class BGEM3EmbeddingProvider(EmbeddingProvider):
 
                 model = SentenceTransformer(self._model_name, device=self._device)
                 BGEM3EmbeddingProvider._shared_model = model
-                BGEM3EmbeddingProvider._shared_model_name = self._model_name
+                BGEM3EmbeddingProvider._shared_model_key = cache_key
                 return model
             except ImportError:
                 pass

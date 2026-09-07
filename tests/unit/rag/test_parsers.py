@@ -229,3 +229,84 @@ def test_registry_unsupported_media_type_raises() -> None:
     with pytest.raises(UnsupportedMediaTypeError) as excinfo:
         registry.select_by_mime_and_sniff("video/mp4", filename="clip.mp4")
     assert "No document parser available" in str(excinfo.value)
+
+
+def test_markdown_parser_non_linear_headings() -> None:
+    parser = MarkdownParser()
+    md_content = b"### Subtitle\nText inside subtitle\n## Main Section\nText inside main section"
+    doc = parser.parse(md_content)
+    assert len(doc.sections) == 2
+    # Subtitle is H3
+    assert doc.sections[0].section_header == "Subtitle"
+    assert doc.sections[0].hierarchy == ["Subtitle"]
+    # Main Section is H2: must NOT be placed as a child of Subtitle
+    assert doc.sections[1].section_header == "Main Section"
+    assert doc.sections[1].hierarchy == ["Main Section"]
+
+
+def test_markdown_parser_closed_atx_headings() -> None:
+    parser = MarkdownParser()
+    md_content = b"## Closed Heading ##\nSome content."
+    doc = parser.parse(md_content)
+    assert len(doc.sections) == 1
+    assert doc.sections[0].section_header == "Closed Heading"
+    assert doc.sections[0].hierarchy == ["Closed Heading"]
+
+
+def test_pdf_parser_encrypted_raises_validation_error() -> None:
+    parser = PDFParser()
+    writer = PdfWriter()
+    writer.add_blank_page(width=100, height=100)
+    writer.encrypt("secure_password")
+    buf = io.BytesIO()
+    writer.write(buf)
+
+    with pytest.raises(ValidationError) as excinfo:
+        parser.parse(buf.getvalue())
+    assert "Password-protected or encrypted" in str(excinfo.value)
+
+
+def test_pdf_parser_real_text_extraction() -> None:
+    parser = PDFParser()
+    # Construct minimal valid PDF with a page containing a text stream
+    pdf_bytes = (
+        b"%PDF-1.4\n"
+        b"1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj\n"
+        b"2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>> endobj\n"
+        b"3 0 obj <</Type /Page /Parent 2 0 R /Resources 4 0 R /MediaBox [0 0 500 800] /Contents 5 0 R>> endobj\n"
+        b"4 0 obj <</Font <</F1 <</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>>>>> endobj\n"
+        b"5 0 obj <</Length 44>> stream\n"
+        b"BT /F1 12 Tf 100 700 Td (Hello RAG PDF World) Tj ET\n"
+        b"endstream\n"
+        b"endobj\n"
+        b"xref\n"
+        b"0 6\n"
+        b"0000000000 65535 f \n"
+        b"0000000009 00000 n \n"
+        b"0000000056 00000 n \n"
+        b"0000000111 00000 n \n"
+        b"0000000212 00000 n \n"
+        b"0000000289 00000 n \n"
+        b"trailer <</Size 6 /Root 1 0 R>>\n"
+        b"startxref\n"
+        b"382\n"
+        b"%%EOF\n"
+    )
+    doc = parser.parse(pdf_bytes, filename="real_text.pdf")
+    assert "Hello RAG PDF World" in doc.raw_text
+    assert len(doc.sections) == 1
+    assert doc.sections[0].page_number == 1
+    assert "Hello RAG PDF World" in doc.sections[0].content
+
+
+def test_registry_prefers_specific_extension_over_generic_mime() -> None:
+    registry = get_default_parser_registry()
+    # Generic text/plain but with .md filename should select MarkdownParser
+    parser_md = registry.select_by_mime_and_sniff("text/plain", filename="notes.md")
+    assert isinstance(parser_md, MarkdownParser)
+
+    # Generic application/octet-stream but with .docx filename should select DocxParser
+    parser_docx = registry.select_by_mime_and_sniff(
+        "application/octet-stream", filename="spec.docx"
+    )
+    assert isinstance(parser_docx, DocxParser)

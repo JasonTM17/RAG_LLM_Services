@@ -114,6 +114,8 @@ class IngestionPipeline:
                 if v.id == doc.current_version_id:
                     target_version = v
                     break
+        elif doc.versions:
+            target_version = doc.versions[-1]
 
         if target_version is None:
             raise NotFoundError(f"No valid version found for document '{document_id}'")
@@ -230,6 +232,10 @@ class IngestionPipeline:
             logger.exception("Ingestion failed for document %s: %s", document_id, err_msg)
             # Record failure state in database safely
             try:
+                session = getattr(self._doc_repo, "_session", None)
+                if session is not None:
+                    await session.rollback()
+
                 await self._transition_status(
                     owner_id,
                     document_id,

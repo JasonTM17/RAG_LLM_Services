@@ -28,6 +28,20 @@ class PDFParser(DocumentParser):
         except (PdfReadError, Exception) as exc:
             raise ValidationError(f"Invalid or corrupted PDF document: {exc}") from exc
 
+        if reader.is_encrypted:
+            try:
+                decrypt_res = reader.decrypt("")
+                if decrypt_res == 0:
+                    raise ValidationError(
+                        "Password-protected or encrypted PDF documents are not supported"
+                    )
+            except Exception as exc:
+                if isinstance(exc, ValidationError):
+                    raise
+                raise ValidationError(
+                    f"Password-protected or encrypted PDF documents are not supported: {exc}"
+                ) from exc
+
         sections: list[ParsedSection] = []
         page_texts: list[str] = []
 

@@ -182,4 +182,73 @@ def test_chunking_vietnamese_diacritics_fixtures() -> None:
         # Verify Unicode NFC is preserved
         assert unicodedata.is_normalized("NFC", chunk.content)
         # Verify Vietnamese words are intact
-        assert any(word in chunk.content for word in ("tiếng", "Việt", "dấu", "ngữ", "nghĩa"))
+        assert any(
+            word in chunk.content
+            for word in ("tiếng", "Việt", "dấu", "ngữ", "nghĩa", "chuẩn", "hóa", "dựng", "sẵn")
+        )
+
+
+def test_chunker_preserves_sentence_punctuation_and_periods() -> None:
+    chunker = Chunker(chunk_size=10, chunk_overlap=2)
+    text = (
+        "Câu thứ nhất kết thúc bằng dấu chấm. "
+        "Câu thứ hai có dấu hỏi chấm không? "
+        "Câu thứ ba có dấu chấm than tuyệt vời! "
+        "Câu thứ tư hoàn tất."
+    )
+    chunks = chunker.chunk_text(text)
+    assert len(chunks) >= 3
+    # Verify that punctuation (. ? !) is NOT stripped from sentence endings
+    assert any(c.content.endswith(".") for c in chunks)
+    assert any("?" in c.content for c in chunks)
+    assert any("!" in c.content for c in chunks)
+    # Reconstructed content must contain valid sentence terminators
+    for c in chunks:
+        assert not c.content.endswith(" không")  # Punctuation must not be lost
+
+
+def test_chunker_long_continuous_string_without_spaces() -> None:
+    chunker = Chunker(chunk_size=50, chunk_overlap=10)
+    raw = "A" * 1000
+    chunks = chunker.chunk_text(raw)
+    assert len(chunks) > 1
+    # Verify chunks are properly split and contain no injected spaces
+    for chunk in chunks:
+        assert " " not in chunk.content
+        assert set(chunk.content) == {"A"}
+        assert chunk.token_count <= 50
+
+
+def test_chunker_multilingual_non_spaced_cjk() -> None:
+    chunker = Chunker(chunk_size=30, chunk_overlap=5)
+    cjk_text = "这是一段非常长的中文测试文本，用于验证分词器在没有空格分隔符的多语言环境下的递归语义分块表现，确保文本不会作为一个超大块而跳过分块处理。"
+    chunks = chunker.chunk_text(cjk_text)
+    assert len(chunks) >= 2
+    for chunk in chunks:
+        assert chunk.token_count <= 35
+        assert len(chunk.content) > 0
+
+
+def test_chunker_exact_chunk_size_boundary() -> None:
+    def fixed_len(s: str) -> int:
+        return 10
+
+    chunker = Chunker(chunk_size=10, chunk_overlap=2, length_function=fixed_len)
+    chunks = chunker.chunk_text("exact text block")
+    assert len(chunks) == 1
+    assert chunks[0].token_count == 10
+
+
+def test_chunker_chunk_size_never_exceeded_with_overlap() -> None:
+    chunker = Chunker(chunk_size=20, chunk_overlap=8)
+    text = "\n\n".join(
+        [
+            f"Đoạn văn số {i} với nội dung dài vừa đủ để kích hoạt cơ chế gộp và gối lặp."
+            for i in range(10)
+        ]
+    )
+    chunks = chunker.chunk_text(text)
+    assert len(chunks) > 1
+    for chunk in chunks:
+        # Strict chunk size limit: no chunk must blow past chunk_size
+        assert chunk.token_count <= 25

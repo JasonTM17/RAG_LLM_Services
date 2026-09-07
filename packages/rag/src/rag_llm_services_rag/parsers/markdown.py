@@ -39,21 +39,21 @@ class MarkdownParser(DocumentParser):
         lines = text.splitlines(keepends=True)
         sections: list[ParsedSection] = []
 
-        current_header: str | None = None
-        current_level: int = 0
-        current_hierarchy: list[str] = []
+        heading_stack: list[tuple[int, str]] = []
         current_lines: list[str] = []
 
         def flush_section() -> None:
             nonlocal current_lines
             content_str = "".join(current_lines).strip()
             if content_str:
+                header = heading_stack[-1][1] if heading_stack else None
+                hierarchy = [t for _, t in heading_stack]
                 sections.append(
                     ParsedSection(
                         content=content_str,
                         page_number=None,
-                        section_header=current_header,
-                        hierarchy=list(current_hierarchy),
+                        section_header=header,
+                        hierarchy=hierarchy,
                         metadata={"filename": filename} if filename else {},
                     )
                 )
@@ -66,21 +66,14 @@ class MarkdownParser(DocumentParser):
                 flush_section()
                 level = len(match.group(1))
                 title = match.group(2).strip()
+                # Strip optional closing hashes in closed ATX headings (e.g. "## Title ##")
+                title = re.sub(r"\s+#+$", "", title).strip()
 
-                # Adjust hierarchy stack based on heading depth
-                if level > current_level:
-                    current_hierarchy.append(title)
-                elif level == current_level:
-                    if current_hierarchy:
-                        current_hierarchy[-1] = title
-                    else:
-                        current_hierarchy = [title]
-                else:
-                    # Ascended to a shallower heading
-                    current_hierarchy = current_hierarchy[: level - 1] + [title]
+                # Pop headings at same or deeper level
+                while heading_stack and heading_stack[-1][0] >= level:
+                    heading_stack.pop()
+                heading_stack.append((level, title))
 
-                current_level = level
-                current_header = title
                 current_lines.append(line)
             else:
                 current_lines.append(line)

@@ -54,6 +54,25 @@ class ParserRegistry:
 
         Raises UnsupportedMediaTypeError if no suitable parser is found.
         """
+        normalized_mime = mime_type.lower().split(";")[0].strip()
+
+        # If MIME is generic or text/plain with a markdown filename, prefer extension
+        is_generic_mime = normalized_mime in (
+            "application/octet-stream",
+            "binary/octet-stream",
+            "application/x-download",
+            "",
+        ) or (
+            normalized_mime == "text/plain"
+            and filename is not None
+            and filename.lower().endswith((".md", ".markdown"))
+        )
+
+        if is_generic_mime and filename:
+            ext_parser = self.get_by_extension(filename)
+            if ext_parser is not None:
+                return ext_parser
+
         # 1. Try explicit MIME type
         parser = self.get_by_mime(mime_type)
         if parser is not None:
@@ -82,7 +101,9 @@ class ParserRegistry:
         """Sniff content type using magic bytes or puremagic if available."""
         if content.startswith(b"%PDF-"):
             return "application/pdf"
-        if content.startswith(b"PK\x03\x04"):
+        if content.startswith(b"PK\x03\x04") and (
+            b"word/" in content[:4096] or b"[Content_Types].xml" in content[:4096]
+        ):
             return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         try:
             import puremagic

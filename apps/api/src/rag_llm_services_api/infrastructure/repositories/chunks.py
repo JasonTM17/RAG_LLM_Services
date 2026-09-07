@@ -46,6 +46,7 @@ class ChunkRepository:
         # 1. Delete existing chunks for this version
         delete_stmt = delete(DocumentChunkModel).where(
             DocumentChunkModel.owner_id == owner_id,
+            DocumentChunkModel.document_id == document_id,
             DocumentChunkModel.document_version_id == document_version_id,
         )
         await self._session.execute(delete_stmt)
