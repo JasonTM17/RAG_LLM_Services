@@ -258,6 +258,13 @@ async def test_document_upload_lifecycle(test_env) -> None:
     assert str(queue.enqueued[0].document_id) == doc_id
     assert str(queue.enqueued[0].version_id) == upload_data["version_id"]
 
+    # 2b. List endpoint exposes current-version chunk count for the frontend table.
+    list_resp = await client.get("/api/v1/documents", params={"knowledge_base_id": kb_id})
+    assert list_resp.status_code == 200
+    listed_docs = list_resp.json()
+    assert listed_docs[0]["id"] == doc_id
+    assert listed_docs[0]["chunk_count"] == 0
+
     # 3. Duplicate upload to same KB must be rejected with 409 DUPLICATE_DOCUMENT
     dup_resp = await client.post(
         "/api/v1/documents",
@@ -275,6 +282,7 @@ async def test_document_upload_lifecycle(test_env) -> None:
     detail = detail_resp.json()
     assert detail["id"] == doc_id
     assert len(detail["versions"]) == 1
+    assert detail["chunk_count"] == 0
     assert detail["versions"][0]["checksum_sha256"] == upload_data["checksum_sha256"]
 
     # 5. Download endpoint

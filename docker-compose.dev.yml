@@ -1,4 +1,8 @@
 services:
+  web:
+    environment:
+      RAG_BACKEND_ORIGIN: http://host.docker.internal:8000
+
   worker:
     environment:
       APP_ENV: development

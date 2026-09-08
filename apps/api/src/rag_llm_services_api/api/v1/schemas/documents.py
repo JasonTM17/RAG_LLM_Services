@@ -34,6 +34,7 @@ class DocumentResponse(BaseModel):
     status: str
     error_message: str | None = None
     current_version_id: UUID | None = None
+    chunk_count: int | None = None
     created_at: datetime
     updated_at: datetime
 

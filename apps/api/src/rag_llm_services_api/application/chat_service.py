@@ -7,7 +7,7 @@ import logging
 import time
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from rag_llm_services_agents.citations import (
@@ -62,6 +62,8 @@ class ChatStreamChunk:
     conversation_id: UUID | None = None
     message_id: UUID | None = None
     usage: LLMUsage | None = None
+    citations: list[CitedChunk] = field(default_factory=list)
+    retrieved_sources: list[CitedChunk] = field(default_factory=list)
     error_code: str | None = None
     error_message: str | None = None
 
@@ -277,6 +279,8 @@ class ChatApplicationService:
                         conversation_id=conversation_id,
                         message_id=assistant_message.id,
                         usage=response.usage,
+                        citations=self._cited_chunks_or_raise(response.content, context_bundle),
+                        retrieved_sources=context_bundle.cited_chunks if context_bundle else [],
                     )
                     continue
                 if event.error_code:
@@ -456,6 +460,8 @@ def stream_chunk_to_json(chunk: ChatStreamChunk) -> str:
             "conversation_id": str(chunk.conversation_id) if chunk.conversation_id else None,
             "message_id": str(chunk.message_id) if chunk.message_id else None,
             "usage": usage,
+            "citations": [_cited_chunk_to_json(cited) for cited in chunk.citations],
+            "retrieved_sources": [_cited_chunk_to_json(cited) for cited in chunk.retrieved_sources],
             "error_code": chunk.error_code,
             "error_message": chunk.error_message,
         },
@@ -466,3 +472,20 @@ def stream_chunk_to_json(chunk: ChatStreamChunk) -> str:
 def new_message_idempotency_key() -> str:
     """Generate a stable idempotency key when a caller needs one before persistence."""
     return str(uuid.uuid4())
+
+
+def _cited_chunk_to_json(chunk: CitedChunk) -> dict[str, object]:
+    retrieval_method = getattr(chunk.retrieval_method, "value", chunk.retrieval_method)
+    return {
+        "source_id": chunk.source_id,
+        "chunk_id": str(chunk.chunk_id),
+        "document_id": str(chunk.document_id),
+        "content": chunk.content,
+        "filename": chunk.filename,
+        "page": chunk.page,
+        "section": chunk.section,
+        "token_count": chunk.token_count,
+        "score": chunk.score,
+        "retrieval_method": retrieval_method,
+        "metadata": chunk.metadata,
+    }

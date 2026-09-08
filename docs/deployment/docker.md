@@ -25,6 +25,12 @@ evaluation runner, including dataset path, report directory, top K, and
 thresholds. Evaluation tasks share the configured Celery/Redis queue with
 ingestion tasks and write generated reports to the mounted project workspace.
 
+The web service receives `RAG_BACKEND_ORIGIN`, which is consumed only by
+Next.js server-side rewrites. Browser code uses same-origin `/api/v1/*` and
+`/health/*` requests, so provider keys and backend credentials are not exposed
+through `NEXT_PUBLIC_*` variables. The compose web profile defaults to
+`WEB_PORT=3001` on the host to avoid Grafana's default `3000` port.
+
 ## Readiness Gates
 
 - Compose config validates.
@@ -34,6 +40,8 @@ ingestion tasks and write generated reports to the mounted project workspace.
 - Prometheus can scrape API and worker metrics.
 - Grafana datasource and dashboards provision from source-controlled files.
 - n8n workflows import without credentials.
+- Web app lint, type-check, unit/component tests, build, and mocked Playwright
+  desktop/mobile flow pass.
 
 ## n8n
 
@@ -80,6 +88,18 @@ Validate the dashboard contract with:
 ```powershell
 uv run python scripts/validate-grafana-dashboards.py
 ```
+
+## Web
+
+Start the Next.js frontend in the `web` profile:
+
+```powershell
+docker compose --profile web up web
+```
+
+Open `http://localhost:${WEB_PORT:-3001}`. For direct local development, run
+`make api-run` in one terminal and `pnpm web:dev` in another; the dev server
+uses port `3000` unless overridden by Next.js CLI flags.
 
 ## Non-Goals
 

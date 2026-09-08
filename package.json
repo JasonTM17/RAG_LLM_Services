@@ -1,0 +1,17 @@
+{
+  "name": "rag-llm-services-workspace",
+  "private": true,
+  "packageManager": "pnpm@11.0.9",
+  "engines": {
+    "node": ">=24.12.0"
+  },
+  "scripts": {
+    "web:dev": "pnpm --filter @rag-llm-services/web dev",
+    "web:build": "pnpm --filter @rag-llm-services/web build",
+    "web:lint": "pnpm --filter @rag-llm-services/web lint",
+    "web:typecheck": "pnpm --filter @rag-llm-services/web typecheck",
+    "web:test": "pnpm --filter @rag-llm-services/web test",
+    "web:e2e": "pnpm --filter @rag-llm-services/web e2e",
+    "web:verify": "pnpm --filter @rag-llm-services/web verify"
+  }
+}

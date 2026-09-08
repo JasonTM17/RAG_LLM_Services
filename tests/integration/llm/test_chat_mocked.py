@@ -180,4 +180,7 @@ async def test_chat_stream_endpoint_uses_semantic_events_without_done_sentinel(
 
     assert "event: response.output_text.delta" in body
     assert "event: response.completed" in body
+    assert '"citations": [{"source_id": "[S1]"' in body
+    assert '"retrieved_sources": [{"source_id": "[S1]"' in body
+    assert '"filename": "deepseek.md"' in body
     assert "[DONE]" not in body

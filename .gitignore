@@ -40,6 +40,8 @@ coverage/
 .turbo/
 .vercel/
 .pnpm-store/
+test-results/
+playwright-report/
 
 # Docker and local service state
 /.docker/

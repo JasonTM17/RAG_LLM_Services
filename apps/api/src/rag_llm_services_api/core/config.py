@@ -2,9 +2,10 @@
 
 Contract notes:
 
-- Every field maps to exactly one ``.env.example`` key through an explicit
-  full-name ``validation_alias``; ``KNOWN_ENV_VARS`` and ``.env.example`` must
-  stay in parity (enforced by ``tests/unit/api/test_config.py``).
+- Every in-process field maps to exactly one ``.env.example`` key through an
+  explicit full-name ``validation_alias``; ``KNOWN_ENV_VARS`` and
+  ``.env.example`` must stay in parity, including compose/frontend-only keys
+  enforced by ``tests/unit/api/test_config.py``.
 - ``local``/``development``/``test`` environments get development defaults so
   the app and tests run offline; ``production`` fails fast with safe errors
   when mandatory configuration is missing or still a placeholder, and dev
@@ -150,7 +151,8 @@ KNOWN_ENV_VARS = frozenset(
         "EVAL_CITATION_CORRECTNESS_THRESHOLD",
         "EVAL_CITATION_RECALL_THRESHOLD",
         "EVAL_FAITHFULNESS_THRESHOLD",
-        "NEXT_PUBLIC_API_BASE_URL",
+        "WEB_PORT",
+        "RAG_BACKEND_ORIGIN",
     }
 )
 
@@ -574,7 +576,8 @@ class EvaluationSettings(BaseSettings):
 class FrontendSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    next_public_api_base_url: str | None = Field(None, validation_alias="NEXT_PUBLIC_API_BASE_URL")
+    web_port: int = Field(3001, ge=1, le=65535, validation_alias="WEB_PORT")
+    rag_backend_origin: str = Field("http://localhost:8000", validation_alias="RAG_BACKEND_ORIGIN")
 
 
 class Settings(BaseSettings):

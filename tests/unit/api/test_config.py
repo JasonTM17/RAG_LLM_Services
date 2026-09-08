@@ -106,6 +106,8 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.evaluation.citation_correctness_threshold == 1.0
     assert settings.evaluation.citation_recall_threshold == 0.8
     assert settings.evaluation.faithfulness_threshold == 0.6
+    assert settings.frontend.web_port == 3001
+    assert settings.frontend.rag_backend_origin == "http://localhost:8000"
 
 
 def test_retrieval_defaults_are_configurable(monkeypatch: pytest.MonkeyPatch) -> None:

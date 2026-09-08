@@ -22,6 +22,7 @@ from rag_llm_services_api.api.v1.schemas.documents import (
 )
 from rag_llm_services_api.application.document_service import DocumentApplicationService
 from rag_llm_services_api.core.errors import DuplicateDocumentError, NotFoundError, ValidationError
+from rag_llm_services_api.db.models.document import DocumentModel
 from rag_llm_services_api.db.session import get_session
 from rag_llm_services_api.infrastructure.queue import get_task_queue
 from rag_llm_services_api.infrastructure.queue.base import (
@@ -29,6 +30,7 @@ from rag_llm_services_api.infrastructure.queue.base import (
     QueueEnqueueResult,
     TaskQueue,
 )
+from rag_llm_services_api.infrastructure.repositories.chunks import ChunkRepository
 from rag_llm_services_api.infrastructure.repositories.documents import DocumentRepository
 from rag_llm_services_api.infrastructure.repositories.knowledge_bases import KnowledgeBaseRepository
 from rag_llm_services_api.infrastructure.storage.base import ObjectStoragePort, StreamHasher
@@ -153,13 +155,21 @@ async def list_documents(
 ) -> list[DocumentResponse]:
     """List documents for the authenticated owner."""
     repo = DocumentRepository(session)
+    chunk_repo = ChunkRepository(session)
     docs = await repo.list_documents(
         owner_id=owner_id,
         knowledge_base_id=knowledge_base_id,
         skip=skip,
         limit=limit,
     )
-    return [DocumentResponse.model_validate(doc) for doc in docs]
+    return [
+        await _document_response_with_chunk_count(
+            owner_id=owner_id,
+            document=doc,
+            chunk_repo=chunk_repo,
+        )
+        for doc in docs
+    ]
 
 
 @router.get(
@@ -170,10 +180,12 @@ async def list_documents(
 async def get_document(
     document_id: UUID,
     owner_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_session)],
     service: Annotated[DocumentApplicationService, Depends(get_document_service)],
 ) -> DocumentDetailResponse:
     """Get document details with versions list."""
     doc = await service.get_document(owner_id, document_id)
+    chunk_repo = ChunkRepository(session)
     versions = [DocumentVersionResponse.model_validate(v) for v in (doc.versions or [])]
     return DocumentDetailResponse(
         id=doc.id,
@@ -184,6 +196,11 @@ async def get_document(
         status=doc.status,
         error_message=doc.error_message,
         current_version_id=doc.current_version_id,
+        chunk_count=await _current_version_chunk_count(
+            owner_id=owner_id,
+            document=doc,
+            chunk_repo=chunk_repo,
+        ),
         created_at=doc.created_at,
         updated_at=doc.updated_at,
         versions=versions,
@@ -252,6 +269,35 @@ async def reindex_document(
         queue=queue,
     )
     return IngestionJobResponse.model_validate(job)
+
+
+async def _document_response_with_chunk_count(
+    *,
+    owner_id: UUID,
+    document: DocumentModel,
+    chunk_repo: ChunkRepository,
+) -> DocumentResponse:
+    response = DocumentResponse.model_validate(document)
+    return response.model_copy(
+        update={
+            "chunk_count": await _current_version_chunk_count(
+                owner_id=owner_id,
+                document=document,
+                chunk_repo=chunk_repo,
+            )
+        }
+    )
+
+
+async def _current_version_chunk_count(
+    *,
+    owner_id: UUID,
+    document: DocumentModel,
+    chunk_repo: ChunkRepository,
+) -> int:
+    if document.current_version_id is None:
+        return 0
+    return await chunk_repo.count_chunks_by_version(owner_id, document.current_version_id)
 
 
 async def _enqueue_ingestion_or_fail(
