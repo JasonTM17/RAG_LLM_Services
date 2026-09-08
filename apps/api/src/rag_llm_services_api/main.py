@@ -17,7 +17,12 @@ from rag_llm_services_api.api.metrics import router as metrics_router
 from rag_llm_services_api.api.v1.router import router as api_v1_router
 from rag_llm_services_api.core.config import PLACEHOLDER_MARKERS, Settings, get_settings
 from rag_llm_services_api.core.error_handlers import register_exception_handlers
-from rag_llm_services_api.core.middleware import MetricsMiddleware, RequestIdMiddleware
+from rag_llm_services_api.core.middleware import (
+    MetricsMiddleware,
+    RequestIdMiddleware,
+    SecurityHeadersMiddleware,
+)
+from rag_llm_services_api.core.rate_limit import RateLimitMiddleware, build_rate_limit_store
 from rag_llm_services_api.db.session import dispose_engine
 from rag_llm_services_api.infrastructure.llm import dispose_llm_provider
 from rag_llm_services_observability.logging_setup import configure_logging
@@ -78,7 +83,19 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(
+        RateLimitMiddleware,
+        enabled=settings.rate_limit.enabled,
+        requests_per_window=settings.rate_limit.requests_per_window,
+        window_seconds=settings.rate_limit.window_seconds,
+        store=build_rate_limit_store(
+            settings.rate_limit.backend,
+            redis_url=settings.redis.url,
+        ),
+        fail_closed=settings.app.env == "production",
+    )
     app.add_middleware(MetricsMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     # Added last so it is outermost: request IDs cover CORS preflight too.
     app.add_middleware(RequestIdMiddleware)
 

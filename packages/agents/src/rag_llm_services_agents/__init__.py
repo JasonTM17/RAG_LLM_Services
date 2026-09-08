@@ -6,6 +6,12 @@ from rag_llm_services_agents.citations import (
     CitationValidator,
 )
 from rag_llm_services_agents.context_window import ContextWindowManager, HistoryMessage
+from rag_llm_services_agents.prompt_security import (
+    UNTRUSTED_CONTEXT_CLOSE,
+    UNTRUSTED_CONTEXT_OPEN,
+    UNTRUSTED_CONTEXT_RULES,
+    build_untrusted_context_section,
+)
 from rag_llm_services_agents.rag_agent import RAGAgent, RAGAgentResult
 from rag_llm_services_agents.router_agent import AgentIntent, IntentRoute, RouterAgent
 from rag_llm_services_agents.runtime import (
@@ -40,6 +46,9 @@ from rag_llm_services_agents.tools import (
 )
 
 __all__ = [
+    "UNTRUSTED_CONTEXT_CLOSE",
+    "UNTRUSTED_CONTEXT_OPEN",
+    "UNTRUSTED_CONTEXT_RULES",
     "AgentIntent",
     "AgentToolLimits",
     "AgentToolScopeError",
@@ -73,5 +82,6 @@ __all__ = [
     "build_deepseek_sdk_model",
     "build_sdk_agent_set",
     "build_sdk_knowledge_tools",
+    "build_untrusted_context_section",
     "sdk_function_tool",
 ]

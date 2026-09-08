@@ -65,6 +65,10 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.queue.visibility_timeout_seconds == 3600
     assert settings.queue.worker_pool == "threads"
     assert settings.queue.worker_concurrency == 4
+    assert settings.rate_limit.enabled is True
+    assert settings.rate_limit.backend == "memory"
+    assert settings.rate_limit.requests_per_window == 120
+    assert settings.rate_limit.window_seconds == 60
     assert settings.n8n.host == "localhost"
     assert settings.n8n.image == "docker.n8n.io/n8nio/n8n:2.37.11"
     assert settings.n8n.port == 5678
@@ -155,6 +159,8 @@ def test_production_with_dev_auth_enabled_fails_closed(
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("QUEUE_PROVIDER", "celery")
+    monkeypatch.setenv("CORS_ORIGINS", "https://rag.example.com")
+    monkeypatch.setenv("RATE_LIMIT_BACKEND", "redis")
     real = "real-value-not-a-placeholder"
     monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://u:{real}@db:5432/d")
     monkeypatch.setenv("DEEPSEEK_API_KEY", real)
@@ -176,6 +182,8 @@ def test_production_with_complete_config_constructs(
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("QUEUE_PROVIDER", "celery")
+    monkeypatch.setenv("CORS_ORIGINS", "https://rag.example.com")
+    monkeypatch.setenv("RATE_LIMIT_BACKEND", "redis")
     real = "real-value-not-a-placeholder"
     monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://u:{real}@db:5432/d")
     monkeypatch.setenv("DEEPSEEK_API_KEY", real)
@@ -258,6 +266,8 @@ def test_production_guard_covers_every_required_var(
             monkeypatch.setenv(key, value)
         monkeypatch.setenv("LLM_PROVIDER", "deepseek")
         monkeypatch.setenv("QUEUE_PROVIDER", "celery")
+        monkeypatch.setenv("CORS_ORIGINS", "https://rag.example.com")
+        monkeypatch.setenv("RATE_LIMIT_BACKEND", "redis")
         monkeypatch.setenv("APP_ENV", "production")
         with pytest.raises(ConfigurationError) as excinfo:
             Settings(_env_file=None)
@@ -268,6 +278,8 @@ def test_production_requires_celery_queue(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("QUEUE_PROVIDER", "memory")
+    monkeypatch.setenv("CORS_ORIGINS", "https://rag.example.com")
+    monkeypatch.setenv("RATE_LIMIT_BACKEND", "redis")
     real = "real-value-not-a-placeholder"
     monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://u:{real}@db:5432/d")
     monkeypatch.setenv("DEEPSEEK_API_KEY", real)

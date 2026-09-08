@@ -3,7 +3,7 @@ SHELL := powershell
 
 PLAN_DIR := plans/260906-2101-rag-llm-services-production-platform
 
-.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 verify-phase-07 verify-phase-08 verify-phase-09 verify-phase-10 verify-phase-11 verify-phase-12 verify-phase-13 eval validate-n8n validate-prometheus validate-grafana check-ignore secret-scan web-dev web-build web-lint web-typecheck web-test web-e2e web-verify api-test api-lint api-typecheck api-migrate api-run worker-run acceptance-demo backup-dry-run restore-dry-run
+.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 verify-phase-07 verify-phase-08 verify-phase-09 verify-phase-10 verify-phase-11 verify-phase-12 verify-phase-13 verify-phase-14 eval validate-n8n validate-prometheus validate-grafana check-ignore secret-scan dependency-scan sql-scan web-dev web-build web-lint web-typecheck web-test web-e2e web-verify api-test api-lint api-typecheck api-migrate api-run worker-run acceptance-demo backup-dry-run restore-dry-run
 
 help:
 	@Write-Host "RAG_LLM_Services command contract"
@@ -21,12 +21,15 @@ help:
 	@Write-Host "  make verify-phase-11   Run Grafana dashboard and provisioning checks"
 	@Write-Host "  make verify-phase-12   Run RAG evaluation framework checks"
 	@Write-Host "  make verify-phase-13   Run frontend app checks"
+	@Write-Host "  make verify-phase-14   Run security hardening checks"
 	@Write-Host "  make eval              Run the fixture-safe RAG evaluation"
 	@Write-Host "  make validate-n8n      Validate source-controlled n8n workflow exports"
 	@Write-Host "  make validate-prometheus Validate Prometheus scrape and alert contracts"
 	@Write-Host "  make validate-grafana  Validate Grafana provisioning and dashboards"
 	@Write-Host "  make check-ignore      Verify .env stays out of Git"
 	@Write-Host "  make secret-scan       Scan tracked workspace excluding local env files"
+	@Write-Host "  make dependency-scan   Run Python and Node vulnerability scans"
+	@Write-Host "  make sql-scan          Scan for obvious unsafe SQL execution patterns"
 	@Write-Host "  make web-dev           Start the Next.js web app locally"
 	@Write-Host "  make web-build         Build the Next.js web app"
 	@Write-Host "  make web-verify        Run web lint, type-check, and component tests"
@@ -79,6 +82,9 @@ verify-phase-12:
 verify-phase-13:
 	@.\scripts\verify-phase-13.ps1
 
+verify-phase-14:
+	@.\scripts\verify-phase-14.ps1
+
 eval:
 	@uv run python scripts/run-eval.py
 
@@ -96,7 +102,13 @@ check-ignore:
 	@git check-ignore -v .env
 
 secret-scan:
-	@rg -n --hidden --pcre2 "sk-[A-Za-z0-9]{20,}|gh[po]_[A-Za-z0-9]{30,}|Bearer\s+(sk|gh[po]_)[A-Za-z0-9._\-]{20,}" . -g "!**/.env" -g "!**/.git/**" -g "!**/node_modules/**" -g "!**/.venv/**"
+	@uv run python scripts/secret-scan.py
+
+dependency-scan:
+	@uv run python scripts/dependency-scan.py
+
+sql-scan:
+	@uv run python scripts/sql-parameterization-scan.py
 
 web-dev:
 	@pnpm web:dev

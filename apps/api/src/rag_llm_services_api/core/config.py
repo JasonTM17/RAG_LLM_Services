@@ -22,6 +22,7 @@ from uuid import UUID
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from rag_llm_services_api.core.security import validate_cors_origins_for_environment
 from rag_llm_services_shared.errors import ConfigurationError
 
 PLACEHOLDER_MARKERS = ("replace-with", "changeme", "your-", "example")
@@ -52,6 +53,10 @@ KNOWN_ENV_VARS = frozenset(
         "POSTGRES_PASSWORD",
         "DATABASE_URL",
         "REDIS_URL",
+        "RATE_LIMIT_ENABLED",
+        "RATE_LIMIT_BACKEND",
+        "RATE_LIMIT_REQUESTS_PER_WINDOW",
+        "RATE_LIMIT_WINDOW_SECONDS",
         "QUEUE_PROVIDER",
         "CELERY_BROKER_URL",
         "CELERY_RESULT_BACKEND",
@@ -212,6 +217,11 @@ class AppSettings(BaseSettings):
             raise ValueError("CORS_ORIGINS must not contain '*' (credentials are enabled)")
         return value
 
+    @model_validator(mode="after")
+    def _validate_cors_for_environment(self) -> "AppSettings":
+        self.cors_origins = validate_cors_origins_for_environment(self.cors_origins, "development")
+        return self
+
 
 class DevAuthSettings(BaseSettings):
     """Local-only principal resolution; production must fail closed."""
@@ -255,6 +265,27 @@ class RedisSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     url: str = Field("redis://redis:6379/0", validation_alias="REDIS_URL")
+
+
+class RateLimitSettings(BaseSettings):
+    """Request rate-limit settings for browser and API clients."""
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    enabled: bool = Field(True, validation_alias="RATE_LIMIT_ENABLED")
+    backend: str = Field("memory", validation_alias="RATE_LIMIT_BACKEND")
+    requests_per_window: int = Field(
+        120, ge=1, le=100_000, validation_alias="RATE_LIMIT_REQUESTS_PER_WINDOW"
+    )
+    window_seconds: int = Field(60, ge=1, le=86_400, validation_alias="RATE_LIMIT_WINDOW_SECONDS")
+
+    @field_validator("backend")
+    @classmethod
+    def _check_backend(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"memory", "redis"}:
+            raise ValueError("RATE_LIMIT_BACKEND must be one of: memory, redis")
+        return normalized
 
 
 class QueueSettings(BaseSettings):
@@ -596,6 +627,7 @@ class Settings(BaseSettings):
     postgres: PostgresSettings = Field(default_factory=_settings_factory(PostgresSettings))
     database: DatabaseSettings = Field(default_factory=_settings_factory(DatabaseSettings))
     redis: RedisSettings = Field(default_factory=_settings_factory(RedisSettings))
+    rate_limit: RateLimitSettings = Field(default_factory=_settings_factory(RateLimitSettings))
     minio: MinioSettings = Field(default_factory=_settings_factory(MinioSettings))
     queue: QueueSettings = Field(default_factory=_settings_factory(QueueSettings))
     llm: LlmSettings = Field(default_factory=_settings_factory(LlmSettings))
@@ -641,6 +673,14 @@ class Settings(BaseSettings):
             problems.append("LLM_PROVIDER must be deepseek in production")
         if self.queue.provider != "celery":
             problems.append("QUEUE_PROVIDER must be celery in production")
+        if not self.rate_limit.enabled:
+            problems.append("RATE_LIMIT_ENABLED must be true in production")
+        if self.rate_limit.backend != "redis":
+            problems.append("RATE_LIMIT_BACKEND must be redis in production")
+        try:
+            validate_cors_origins_for_environment(self.app.cors_origins, self.app.env)
+        except ValueError:
+            problems.append("CORS_ORIGINS must contain production-safe HTTPS origins")
         if problems:
             raise ConfigurationError("; ".join(problems))
         return self
@@ -670,6 +710,7 @@ __all__ = [
     "PostgresSettings",
     "QueueSettings",
     "RagSettings",
+    "RateLimitSettings",
     "RedisSettings",
     "Settings",
     "get_settings",

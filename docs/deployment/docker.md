@@ -31,6 +31,11 @@ Next.js server-side rewrites. Browser code uses same-origin `/api/v1/*` and
 through `NEXT_PUBLIC_*` variables. The compose web profile defaults to
 `WEB_PORT=3001` on the host to avoid Grafana's default `3000` port.
 
+API rate limiting is configured with `RATE_LIMIT_*`. Direct local/test imports
+default to an in-memory limiter so tests run offline, while `.env.example` sets
+`RATE_LIMIT_BACKEND=redis` for Compose and production-shaped runs. Production
+mode fails closed if rate limiting is disabled or not backed by Redis.
+
 ## Readiness Gates
 
 - Compose config validates.
@@ -42,6 +47,9 @@ through `NEXT_PUBLIC_*` variables. The compose web profile defaults to
 - n8n workflows import without credentials.
 - Web app lint, type-check, unit/component tests, build, and mocked Playwright
   desktop/mobile flow pass.
+- Security verifier passes: prompt-injection, upload abuse, citation abuse,
+  secret/logging scan, SQL parameterization scan, dependency scan, and affected
+  API tests.
 
 ## n8n
 

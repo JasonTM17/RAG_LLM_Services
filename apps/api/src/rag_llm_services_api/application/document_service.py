@@ -108,6 +108,17 @@ def sniff_and_validate_mime(filename: str, content: bytes) -> str:
             )
 
     elif ext in (".txt", ".md"):
+        binary_document_mimes = {
+            "application/pdf",
+            "application/zip",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }
+        if content.startswith((b"%PDF-", b"PK\x03\x04")) or detected in binary_document_mimes:
+            raise UnsupportedMediaTypeError(
+                "Text extension does not match detected binary document content",
+                code="UNSUPPORTED_MEDIA_TYPE",
+                status_code=415,
+            )
         # Plain text / Markdown: verify valid UTF-8 and absence of null bytes
         if b"\x00" in content:
             raise UnsupportedMediaTypeError(

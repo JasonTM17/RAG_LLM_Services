@@ -22,6 +22,7 @@ _SCRUB_PREFIXES = (
     "POSTGRES_",
     "DATABASE_",
     "REDIS_",
+    "RATE_LIMIT_",
     "QUEUE_",
     "CELERY_",
     "INGESTION_",
@@ -38,6 +39,7 @@ _SCRUB_PREFIXES = (
     "GRAFANA_",
     "EVAL_",
     "NEXT_PUBLIC_",
+    "WEB_",
     "LOG_LEVEL",
 )
 

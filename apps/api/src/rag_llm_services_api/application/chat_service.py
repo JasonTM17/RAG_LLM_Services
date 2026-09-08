@@ -14,6 +14,10 @@ from rag_llm_services_agents.citations import (
     CitationValidationError,
     CitationValidator,
 )
+from rag_llm_services_agents.prompt_security import (
+    UNTRUSTED_CONTEXT_RULES,
+    build_untrusted_context_section,
+)
 from rag_llm_services_api.application.retrieval_service import RetrievalService
 from rag_llm_services_api.core.errors import NotFoundError, ValidationError
 from rag_llm_services_api.db.models.conversation import MessageModel
@@ -34,7 +38,8 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """You answer learning questions using only the provided source context.
 If the sources do not contain enough evidence, say so briefly.
-Cite supporting claims with source IDs like [S1]."""
+Cite supporting claims with source IDs like [S1].
+{rules}""".format(rules="\n".join(UNTRUSTED_CONTEXT_RULES))
 
 
 @dataclass(frozen=True)
@@ -84,7 +89,9 @@ class CitationPromptBuilder:
             if role in {MessageRole.USER.value, MessageRole.ASSISTANT.value}
         ]
         context_text = context_bundle.context_text if context_bundle else ""
-        user_content = f"Question:\n{question}\n\nSource context:\n{context_text}".strip()
+        user_content = (
+            f"Question:\n{question.strip()}\n\n{build_untrusted_context_section(context_text)}"
+        )
         return (
             LLMMessage(role=MessageRole.SYSTEM, content=_SYSTEM_PROMPT),
             *history_messages,

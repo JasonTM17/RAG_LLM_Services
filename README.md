@@ -6,7 +6,7 @@ The target system lets a user upload learning documents, build owner-scoped know
 
 ## Current Status
 
-This repository has completed Phases 01-13: repository contract, backend foundation, document management/storage, RAG ingestion/embeddings, hybrid retrieval/reranking, the DeepSeek-compatible LLM/chat gateway, the agent-backed study workflow layer, Redis/Celery async ingestion infrastructure, n8n automation workflow contracts, Prometheus observability, Grafana dashboards, the fixture-safe RAG evaluation framework, and the Next.js frontend application. The FastAPI app now supports typed settings, structured redacting JSON logs, request IDs, standard error envelopes, async SQLAlchemy/Alembic, health endpoints, `GET /metrics`, owner-scoped knowledge bases/documents, upload/download/delete APIs with current-version chunk counts, queued document ingestion, job status/queue status APIs, parser/chunking/embedding ingestion, `POST /api/v1/retrieval/search`, `POST /api/v1/chat`, `POST /api/v1/chat/stream` with final-event citations, `POST /api/v1/study/quiz`, `POST /api/v1/study/flashcards`, `POST /api/v1/study/learning-plan`, `POST /api/v1/automation/reports`, queued deterministic `POST /api/v1/evaluations`, and `GET /api/v1/evaluations/{run_id}` with safe aggregate results after the worker completes. The compose stack includes a web profile, n8n with persistent storage and metrics enabled, a worker metrics endpoint, Prometheus scrape configuration, Grafana datasource/dashboard provisioning, Redis/Postgres exporters, and optional cAdvisor. CI, deployment, live DeepSeek proof, and acceptance-demo behavior are intentionally not implemented yet.
+This repository has completed Phases 01-14: repository contract, backend foundation, document management/storage, RAG ingestion/embeddings, hybrid retrieval/reranking, the DeepSeek-compatible LLM/chat gateway, the agent-backed study workflow layer, Redis/Celery async ingestion infrastructure, n8n automation workflow contracts, Prometheus observability, Grafana dashboards, the fixture-safe RAG evaluation framework, the Next.js frontend application, and security hardening gates. The FastAPI app now supports typed settings, structured redacting JSON logs, request IDs, security headers, standard error envelopes, async SQLAlchemy/Alembic, health endpoints, `GET /metrics`, owner-scoped knowledge bases/documents, upload/download/delete APIs with current-version chunk counts, queued document ingestion, job status/queue status APIs, parser/chunking/embedding ingestion, Redis-backed production rate limiting with local memory fallback, `POST /api/v1/retrieval/search`, `POST /api/v1/chat`, `POST /api/v1/chat/stream` with final-event citations, `POST /api/v1/study/quiz`, `POST /api/v1/study/flashcards`, `POST /api/v1/study/learning-plan`, `POST /api/v1/automation/reports`, queued deterministic `POST /api/v1/evaluations`, and `GET /api/v1/evaluations/{run_id}` with safe aggregate results after the worker completes. The compose stack includes a web profile, n8n with persistent storage and metrics enabled, a worker metrics endpoint, Prometheus scrape configuration, Grafana datasource/dashboard provisioning, Redis/Postgres exporters, and optional cAdvisor. CI, deployment, live DeepSeek proof, production auth, and acceptance-demo behavior are intentionally not implemented yet.
 
 ## Architecture
 
@@ -43,6 +43,7 @@ More detail:
 - Grafana image: `grafana/grafana:13.2.1`, with Prometheus datasource and dashboards provisioned from `infra/grafana/`.
 - Evaluation defaults: `EVAL_DATASET_PATH=evals/datasets/baseline-learning-rag.jsonl`, `EVAL_REPORTS_DIR=evals/reports/local`, `EVAL_TOP_K=5`, and threshold variables under `EVAL_*_THRESHOLD`. Default evaluation uses fixture data and deterministic metrics only.
 - Frontend defaults: `RAG_BACKEND_ORIGIN=http://localhost:8000` for Next.js server-side rewrites, `WEB_PORT=3001` for the compose web profile, and `WEB_E2E_PORT=43117` for Playwright. Browser code calls same-origin `/api/v1/*` and `/health/*` routes only.
+- Security defaults: API rate limiting is enabled; direct local/test imports use process memory, while `.env.example` and production use Redis through `RATE_LIMIT_BACKEND=redis`. Production mode rejects dev auth, placeholder secrets, non-DeepSeek LLM provider, non-Celery queue, disabled rate limiting, memory rate limiting, and local/non-HTTPS CORS origins.
 
 Local secrets live in `.env` and must not be committed. The application reads configuration from **environment variables only** — `.env` files are loaded by the runtime, not parsed in-process: `make api-run` passes `--env-file .env` to uvicorn, and Compose reads `.env` for variable substitution into service environments. `.env.example` documents the placeholder-only configuration surface.
 
@@ -66,6 +67,7 @@ Phase checks:
 .\scripts\verify-phase-11.ps1
 .\scripts\verify-phase-12.ps1
 .\scripts\verify-phase-13.ps1
+.\scripts\verify-phase-14.ps1
 ```
 
 The Makefile mirrors the same contract for environments with `make`:
@@ -86,10 +88,14 @@ make verify-phase-10
 make verify-phase-11
 make verify-phase-12
 make verify-phase-13
+make verify-phase-14
 make eval
 make validate-n8n
 make validate-prometheus
 make validate-grafana
+make secret-scan
+make dependency-scan
+make sql-scan
 make web-dev
 make web-verify
 make web-e2e

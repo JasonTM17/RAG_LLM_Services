@@ -14,7 +14,7 @@ Phase 09 source-controls five n8n exports under `workflows/n8n/`. They are orche
 
 ## API Boundaries
 
-- n8n uses `X-User-Id: ${RAG_WORKFLOW_OWNER_ID}` only for local dev-auth. A real auth boundary arrives in the security phase.
+- n8n uses `X-User-Id: ${RAG_WORKFLOW_OWNER_ID}` only for local dev-auth. Production rejects dev auth; a real production auth boundary remains a release gate.
 - n8n reports use `POST /api/v1/automation/reports`; reports reject credential-shaped values.
 - Retry safety is explicit: report rows deduplicate by owner, workflow, execution `run_id`, and status; evaluation triggers deduplicate by owner and `idempotency_key`.
 - `daily-study-automation.json` does not retry `POST /api/v1/study/flashcards` because Phase 07 study generation creates chat history and LLM output. Workflow failure notification handles that error path.

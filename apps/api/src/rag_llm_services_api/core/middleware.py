@@ -17,6 +17,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
+from rag_llm_services_api.core.security import SECURITY_RESPONSE_HEADERS
 from rag_llm_services_observability.context import request_id_var, set_request_id
 from rag_llm_services_observability.metrics import record_error, record_http_request
 from rag_llm_services_shared.constants import CLIENT_REQUEST_ID_PATTERN, REQUEST_ID_HEADER
@@ -92,3 +93,16 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             request_id_var.reset(token)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Attach conservative browser security headers to every response."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        super().__init__(app)
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        response = await call_next(request)
+        for header, value in SECURITY_RESPONSE_HEADERS.items():
+            response.headers.setdefault(header, value)
+        return response
