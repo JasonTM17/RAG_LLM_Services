@@ -8,9 +8,9 @@ The local default is safe for development and CI: it uses deterministic fakes fo
 
 ## Current Status
 
-Phases 01-15 are implemented locally: repository contract, backend foundation, document storage, ingestion, hybrid retrieval, LLM gateway, study agents, Redis/Celery worker, n8n contracts, Prometheus, Grafana, fixture-safe evaluation, Next.js web app, security hardening, and CI/documentation definitions.
+Phases 01-16 are implemented locally: repository contract, backend foundation, document storage, ingestion, hybrid retrieval, LLM gateway, study agents, Redis/Celery worker, n8n contracts, Prometheus, Grafana, fixture-safe evaluation, Next.js web app, security hardening, CI/documentation definitions, and release-readiness evidence.
 
-Hosted GitHub Actions, live DeepSeek proof, production deployment, production auth, and backup/restore proof remain `NOT_RUN` until the repository is pushed and those external gates are explicitly executed.
+Hosted GitHub Actions, live DeepSeek proof, production deployment, production auth, registry publication, and production backup/restore execution remain `NOT_RUN` or `HOLD` until the repository is pushed and those external gates are explicitly executed. Local backup/restore dry-runs and compose release smoke pass.
 
 ## Architecture
 
@@ -66,6 +66,7 @@ Install the pinned toolchain, then run the safe local checks:
 uv sync
 pnpm install --frozen-lockfile
 .\scripts\verify-phase-15.ps1
+.\scripts\verify-phase-16.ps1
 ```
 
 For day-to-day development:
@@ -181,7 +182,7 @@ Retrieval and evaluation details are in [Hybrid retrieval and reranking pipeline
 
 ## Security
 
-The local security posture is documented in [Threat model](docs/security/threat-model.md). Production release remains on hold until CI, live-provider, production auth/TLS, secrets, backup/restore, and deployment evidence are separately proven.
+The local security posture is documented in [Threat model](docs/security/threat-model.md). Production release remains on hold until hosted CI, live-provider, production auth/TLS, secrets, production backup/restore execution, registry publication, and deployment evidence are separately proven.
 
 Run the default security gates with:
 
