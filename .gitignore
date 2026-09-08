@@ -70,6 +70,9 @@ logs/
 tmp/
 temp/
 .cache/
+.tmp/
+.tmp-*/
+.uv-cache/
 
 # Agent/runtime local state, not project contracts
 .codex/skills/

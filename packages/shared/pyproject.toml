@@ -2,6 +2,8 @@
 name = "rag-llm-services-shared"
 version = "0.1.0"
 description = "Shared contracts for RAG LLM Services: error hierarchy, wire envelopes, constants."
+authors = [{ name = "Nguyen Tien Son" }]
+license = "MIT"
 requires-python = ">=3.13"
 dependencies = ["pydantic>=2.9"]
 

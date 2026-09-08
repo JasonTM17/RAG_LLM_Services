@@ -2,6 +2,15 @@
 name = "rag-llm-services"
 version = "0.1.0"
 description = "RAG LLM Services production platform: uv workspace root."
+authors = [{ name = "Nguyen Tien Son" }]
+license = "MIT"
+keywords = ["rag", "llm", "deepseek", "fastapi", "n8n", "embeddings", "pgvector"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
 requires-python = ">=3.13"
 # Deviation note: members are declared as root dependencies so that plain
 # `uv sync` / `uv run` install the whole workspace; with an empty dependency
@@ -16,6 +25,10 @@ dependencies = [
     "rag-llm-services-agents",
     "rag-llm-services-worker",
 ]
+
+[project.urls]
+Repository = "https://github.com/JasonTM17/RAG_LLM_Services"
+Issues = "https://github.com/JasonTM17/RAG_LLM_Services/issues"
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-asyncio>=1", "ruff>=0.13", "mypy>=1.18", "aiosqlite>=0.20"]

@@ -2,6 +2,8 @@
 name = "rag-llm-services-agents"
 version = "0.1.0"
 description = "Agent orchestration package for RAG LLM Services."
+authors = [{ name = "Nguyen Tien Son" }]
+license = "MIT"
 requires-python = ">=3.13"
 dependencies = [
     "openai-agents>=0.3",

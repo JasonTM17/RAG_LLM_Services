@@ -2,6 +2,8 @@
 name = "rag-llm-services-embeddings"
 version = "0.1.0"
 description = "Embedding provider protocol and BGE-M3/Fake implementations for RAG LLM Services."
+authors = [{ name = "Nguyen Tien Son" }]
+license = "MIT"
 requires-python = ">=3.13"
 dependencies = [
     "rag-llm-services-shared",
