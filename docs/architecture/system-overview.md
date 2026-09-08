@@ -4,6 +4,57 @@
 
 `RAG_LLM_Services` is a Docker Compose modular monolith plus worker. The architecture keeps request handling, domain rules, RAG logic, provider adapters, automation, CI evidence, and observability in separate boundaries.
 
+## System Diagram
+
+The full component map with default ports is rendered in the [README Architecture section](../../README.md#architecture). The two load-bearing flows below show how a document becomes retrievable and how a question becomes a cited answer.
+
+### Document ingestion flow
+
+```mermaid
+sequenceDiagram
+  participant U as Client
+  participant API as FastAPI API
+  participant M as MinIO
+  participant Q as Redis / Celery
+  participant W as Worker
+  participant P as Postgres + pgvector
+
+  U->>API: POST /api/v1/documents (multipart upload)
+  API->>P: metadata row (owner-scoped, deduplicated by checksum)
+  API->>M: store private raw object
+  API->>Q: enqueue ingestion job
+  W->>Q: claim job
+  W->>M: fetch raw object
+  W->>W: parse, normalize, semantic chunk
+  W->>W: embed with BGE-M3 (deterministic fake in tests)
+  W->>P: transactional chunk replacement, status -> INDEXED
+  U->>API: GET /api/v1/ingestion-jobs/{job_id} for progress
+```
+
+Failure behavior: worker retries are bounded and a final failure moves the job to `FAILED` with a terminal record. A dead worker cannot wedge the queue: stale in-flight ingestion jobs (stuck in `PARSING`/`CHUNKING`/`EMBEDDING`) are reclaimed inline the next time a worker claims from the queue via the stale-before window, and stale `RUNNING` evaluation rows are requeued by the evaluation claim path.
+
+### Grounded chat flow
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant API as FastAPI API
+  participant R as Hybrid retriever
+  participant G as LLM gateway
+  participant D as DeepSeek provider
+
+  C->>API: POST /api/v1/chat or /chat/stream
+  API->>R: query normalization, vector + FTS, RRF fusion, rerank
+  R-->>API: source-labeled context chunks [S1..Sn]
+  API->>G: prompt with untrusted-context guard and citations
+  G->>D: Responses API call (live only when authorized; fake otherwise)
+  D-->>G: answer text + usage
+  G-->>API: response, cost recorded per conversation
+  API-->>C: validated citations; semantic SSE events (no [DONE] sentinel)
+```
+
+The citation validator rejects answer content that invents sources; raw retrieved text is labeled untrusted data, never instructions.
+
 ## Runtime Paths
 
 Main chat path:

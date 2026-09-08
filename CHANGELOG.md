@@ -7,14 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
-
-- Container registry publication (images build green in CI but are not pushed to a registry).
-- Production authentication boundary, TLS, deployment cutover, and production backup/restore execution (all currently `HOLD` or `NOT_RUN`).
-
 ### Verified post-release
 
 - Live DeepSeek provider smoke passed on 2026-09-08 via an operator-authorized `RUN_DEEPSEEK_LIVE_TESTS=1` run (single synthetic prompt, 16-token bound); live key containment audited with zero leaks into tracked, untracked, or git-internal artifacts.
+- `v0.1.0` api, worker, and web images published to the GitHub Container Registry (automatic on `v*` tags from CI) and mirrored to Docker Hub (manifest-identical content); both registries confirmed anonymously pullable and layer-scanned clean of secrets and repository state.
+
+### Planned
+
+- Docker Hub CI dual-push for future tags (requires adding Docker Hub access-token repository secrets).
+- Container registry publication for the observability and exporter images is out of scope; they remain upstream base images pinned by compose.
+- Production authentication boundary, TLS, deployment cutover, and production backup/restore execution (all currently `HOLD` or `NOT_RUN`).
 
 ## [0.1.0] - 2026-09-08
 
