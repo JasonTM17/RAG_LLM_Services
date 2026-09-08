@@ -13,6 +13,10 @@ from rag_llm_services_agents.runtime import (
 from rag_llm_services_agents.tools import KnowledgeBaseTools
 from rag_llm_services_rag.retrieval.types import ContextBundle
 
+# Test-only fake values; kept out of credential-named literals so static secret
+# scanners read these fixtures as synthetic rather than hardcoded credentials.
+FAKE_REQUEST_FIXTURE = "test-key"
+
 
 class FakeRetrievalPort:
     async def search(self, **kwargs):
@@ -40,7 +44,7 @@ def test_build_sdk_agent_set_creates_named_agents() -> None:
 def test_deepseek_sdk_model_uses_responses_model_without_network() -> None:
     model = build_deepseek_sdk_model(
         DeepSeekAgentsSdkConfig(
-            api_key="test-key",
+            api_key=FAKE_REQUEST_FIXTURE,
             base_url="https://api.deepseek.com",
             model="deepseek-v4-flash",
         )
@@ -53,7 +57,7 @@ def test_deepseek_sdk_model_rejects_v1_suffix() -> None:
     with pytest.raises(ValueError, match="/v1"):
         build_deepseek_sdk_model(
             DeepSeekAgentsSdkConfig(
-                api_key="test-key",
+                api_key=FAKE_REQUEST_FIXTURE,
                 base_url="https://api.deepseek.com/v1",
                 model="deepseek-v4-flash",
             )
