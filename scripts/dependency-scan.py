@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -12,7 +13,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _run(command: list[str], *, cwd: Path = REPO_ROOT) -> subprocess.CompletedProcess[str]:
+def _run(
+    command: list[str],
+    *,
+    cwd: Path = REPO_ROOT,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     resolved = shutil.which(command[0])
     if resolved is None:
         return subprocess.CompletedProcess(command, 127, "", f"missing executable: {command[0]}")
@@ -22,6 +28,7 @@ def _run(command: list[str], *, cwd: Path = REPO_ROOT) -> subprocess.CompletedPr
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
 
 
@@ -67,6 +74,10 @@ def _run_python_audit() -> bool:
         if export.returncode != 0:
             _print_failure("uv-export", export)
             return False
+        # Write the JSON report to a file instead of stdout: CI environments set
+        # FORCE_COLOR, and ANSI/banner bytes on stdout would corrupt the JSON.
+        # NO_COLOR additionally suppresses any colored fallback output.
+        report = Path(tmp) / "pip-audit-report.json"
         result = _run(
             [
                 "uv",
@@ -79,12 +90,26 @@ def _run_python_audit() -> bool:
                 str(requirements),
                 "--format",
                 "json",
-            ]
+                "--output",
+                str(report),
+            ],
+            env={**os.environ, "NO_COLOR": "1"},
         )
-    if result.returncode != 0:
-        _print_failure("pip-audit", result)
-        return False
-    data = json.loads(result.stdout or "{}")
+        if result.returncode != 0:
+            _print_failure("pip-audit", result)
+            return False
+        if not report.exists():
+            print("pip-audit: FAIL no JSON report was written")
+            if result.stdout.strip():
+                print(result.stdout.strip()[:2000])
+            if result.stderr.strip():
+                print(result.stderr.strip()[:2000], file=sys.stderr)
+            return False
+        try:
+            data = json.loads(report.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"pip-audit: FAIL unreadable JSON report ({exc})")
+            return False
     dependencies = data.get("dependencies", [])
     vulnerabilities = sum(len(dep.get("vulns", [])) for dep in dependencies)
     print(f"pip-audit: PASS vulnerabilities={vulnerabilities}")
