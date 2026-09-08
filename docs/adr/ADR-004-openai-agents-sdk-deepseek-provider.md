@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-06): implementation begins with Phase 02; rationale recorded in docs/adr/ADR-007-toolchain.md context.
+Accepted. Current implementation uses code-owned agent definitions plus an internal provider gateway for DeepSeek-compatible calls.
 
 ## Context
 
@@ -28,3 +28,7 @@ Use OpenAI Agents SDK in application code with a custom OpenAI-compatible DeepSe
 - OpenAI Agent Builder UI: rejected because runtime must be code-owned.
 - Direct DeepSeek calls in services: rejected because it would prevent future provider swaps.
 - Chat Completions first: reserved as explicit compatibility fallback.
+
+## Larger-Scale Path
+
+Add provider routing, budget policy, and model-specific safety tests inside the gateway instead of inside feature services. Multi-model or multi-provider rollout should keep local conversation state, bounded tool outputs, untrusted retrieved context, and citation validation as non-negotiable contracts.

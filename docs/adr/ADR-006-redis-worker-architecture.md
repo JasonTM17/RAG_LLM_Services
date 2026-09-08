@@ -29,6 +29,10 @@ Default in-process settings use a memory queue for tests and offline local impor
 - Database polling only: reserved as a fallback if Redis worker complexity outweighs benefits.
 - Bare asyncio worker: rejected for v1 because retry/backoff, durable broker integration, and operator familiarity would need more project-owned code.
 
+## Larger-Scale Path
+
+Split ingestion, evaluation, and maintenance onto separate queues when throughput or isolation requires it. Add dead-letter handling, stale-run recovery, worker autoscaling, and deployment-specific tracing before claiming production reliability for long-running background work.
+
 ## References
 
 - Celery task retry guide: https://docs.celeryq.dev/en/stable/userguide/tasks.html

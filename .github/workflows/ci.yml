@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: "1"
+  LLM_PROVIDER: fake
+  OPENAI_TRACING_DISABLED: "true"
+  RUN_DEEPSEEK_LIVE_TESTS: "false"
+
+jobs:
+  python:
+    name: Python lint, types, and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Python workspace
+        run: uv sync --frozen
+
+      - name: Ruff
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Mypy
+        run: uv run mypy apps/api/src apps/worker/src packages evals
+
+      - name: Pytest
+        run: uv run pytest -q
+
+  web:
+    name: Web lint, types, tests, and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.9
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install Node workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm web:lint
+
+      - name: Type-check
+        run: pnpm web:typecheck
+
+      - name: Unit tests
+        run: pnpm web:test
+
+      - name: Production build
+        run: pnpm web:build
+
+  integration-contracts:
+    name: Integration contracts
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: rag_llm_services
+          POSTGRES_USER: rag_app
+          POSTGRES_PASSWORD: rag-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rag_app -d rag_llm_services"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://rag_app:rag-ci-password@localhost:5432/rag_llm_services
+      REDIS_URL: redis://localhost:6379/0
+      QUEUE_PROVIDER: memory
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_BACKEND: memory
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Python workspace
+        run: uv sync --frozen
+
+      - name: Run Alembic migrations against Postgres
+        run: uv run alembic -c apps/api/alembic.ini upgrade head
+
+      - name: Validate workflow, docs, automation, and observability contracts
+        run: |
+          uv run python scripts/validate-github-workflows.py
+          uv run python scripts/docs-check.py
+          uv run python scripts/validate-n8n-workflows.py
+          uv run python scripts/validate-prometheus-config.py
+          uv run python scripts/validate-grafana-dashboards.py
+          uv run python scripts/run-eval.py
+          docker compose --profile api --profile worker --profile web --profile observability --profile container-observability config --quiet

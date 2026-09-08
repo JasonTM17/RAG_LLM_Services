@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-06): implementation begins with Phase 02; rationale recorded in docs/adr/ADR-007-toolchain.md context.
+Accepted. Current implementation uses hybrid vector and keyword retrieval, reciprocal rank fusion, optional reranking, and citation validation.
 
 ## Context
 
@@ -23,3 +23,7 @@ Use hybrid retrieval with pgvector similarity, PostgreSQL Full Text Search, scor
 - Vector-only retrieval: rejected for technical learning content.
 - Keyword-only retrieval: rejected for paraphrased questions.
 - External search service: deferred until local Postgres limits are measured.
+
+## Larger-Scale Path
+
+Tune channel weights, reranker choice, and context budgets through evaluation data before adding infrastructure. If retrieval scale exceeds Postgres limits, move lexical or vector search behind the existing retrieval interfaces and preserve deterministic citation IDs in the response contract.

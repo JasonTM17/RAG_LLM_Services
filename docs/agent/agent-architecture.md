@@ -1,6 +1,6 @@
 # Agent and LLM Gateway Architecture
 
-Phase 06 added the provider-neutral LLM gateway and retrieval-grounded chat API. Phase 07 adds the OpenAI Agents SDK runtime definitions, bounded knowledge tools, Router/RAG/Study agent primitives, source-cited study endpoints, and shared citation validation. Agents call application services and typed tools; they do not query the database, object storage, or DeepSeek directly.
+The provider-neutral LLM gateway and agent layer keep chat, study workflows, bounded knowledge tools, source-cited outputs, and provider calls behind application-owned interfaces. Agents call application services and typed tools; they do not query the database, object storage, or DeepSeek directly.
 
 ## Current Boundary
 
@@ -52,3 +52,10 @@ POST /api/v1/study/learning-plan
 - SDK function tools capture `owner_id` server-side and expose only bounded inputs such as query, document ID, and result limits.
 - Tool outputs truncate large chunks and context text before they enter model prompts.
 - `openai-agents` is available for code-owned agent definitions; normal local tests still use `FakeLLMProvider`.
+
+## Verification
+
+- Mocked chat and streaming: `tests/integration/llm/test_chat_mocked.py`.
+- Study endpoints and citation validation: `tests/integration/agents/test_study_mocked.py`.
+- Agent tool bounds and prompt context rules: `tests/unit/agents/`.
+- Full local gate: `.\scripts\verify-phase-15.ps1`.

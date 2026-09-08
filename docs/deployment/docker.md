@@ -2,9 +2,9 @@
 
 ## Overview
 
-V1 targets Docker Compose, not Kubernetes. Compose is used for local development, integration testing, observability proof, and future deployment rehearsal.
+V1 targets Docker Compose, not Kubernetes. Compose is used for local development, integration testing, observability proof, CI container validation, and future deployment rehearsal.
 
-## Planned Services
+## Services
 
 - `api`: FastAPI application.
 - `worker`: background ingestion and evaluation worker.
@@ -19,6 +19,14 @@ V1 targets Docker Compose, not Kubernetes. Compose is used for local development
 ## Environment
 
 Use `.env` for local runtime secrets and `.env.example` for placeholders. Do not bake secrets into images or committed compose files.
+
+Application images are defined by:
+
+- `apps/api/Dockerfile`
+- `apps/worker/Dockerfile`
+- `apps/web/Dockerfile`
+
+Build them with `make container-build` or through `.github/workflows/container-build.yml`.
 
 The worker service receives the `EVAL_*` variables used by the Phase 12
 evaluation runner, including dataset path, report directory, top K, and
@@ -38,6 +46,8 @@ mode fails closed if rate limiting is disabled or not backed by Redis.
 
 ## Readiness Gates
 
+- GitHub workflow contracts validate locally.
+- API, worker, and web images build.
 - Compose config validates.
 - Database migrations apply.
 - API liveness and readiness endpoints pass.
@@ -108,6 +118,22 @@ docker compose --profile web up web
 Open `http://localhost:${WEB_PORT:-3001}`. For direct local development, run
 `make api-run` in one terminal and `pnpm web:dev` in another; the dev server
 uses port `3000` unless overridden by Next.js CLI flags.
+
+## API and Worker Images
+
+The `api` profile runs the FastAPI image on host `API_PORT` and keeps local
+development defaults unless `.env` overrides them:
+
+```powershell
+docker compose --profile api up api
+```
+
+The `worker` profile remains queue-backed and can be started independently once
+Postgres, Redis, and MinIO are available:
+
+```powershell
+docker compose --profile worker up worker
+```
 
 ## Non-Goals
 

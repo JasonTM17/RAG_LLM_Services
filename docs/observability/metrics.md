@@ -1,8 +1,8 @@
 # Metrics and Observability
 
-Phase 10 adds Prometheus-compatible metrics for the API, worker, RAG pipeline,
-LLM calls, ingestion, cache counters, and backing services. Phase 11 adds
-source-controlled Grafana provisioning so local dashboards load without manual
+The platform exposes Prometheus-compatible metrics for the API, worker, RAG
+pipeline, LLM calls, ingestion, cache counters, and backing services. Grafana
+provisioning is source-controlled so local dashboards load without manual
 imports.
 
 ## Endpoints
@@ -129,8 +129,6 @@ uv run python scripts/validate-grafana-dashboards.py
 .\scripts\verify-phase-11.ps1
 ```
 
-The Phase 10 verifier checks metric labels, `/metrics`, log redaction,
-Prometheus config, compose config, lint, typecheck, tests, secret scan, and
-diff hygiene. The Phase 11 verifier additionally checks Grafana provisioning,
-dashboard JSON, required panel titles, datasource UID usage, no real Grafana
-admin password, compose config, and the same lint/type/test hygiene gates.
+The Phase 15 verifier covers Prometheus and Grafana validators, compose config,
+lint, typecheck, tests, secret scan, and diff hygiene. Earlier phase verifiers
+remain available when a change needs a narrower observability regression.

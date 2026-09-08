@@ -2,7 +2,7 @@
 
 ## Overview
 
-`RAG_LLM_Services` is planned as a Docker Compose modular monolith plus worker. The architecture keeps request handling, domain rules, RAG logic, provider adapters, automation, and observability in separate boundaries from the first implementation phase.
+`RAG_LLM_Services` is a Docker Compose modular monolith plus worker. The architecture keeps request handling, domain rules, RAG logic, provider adapters, automation, CI evidence, and observability in separate boundaries.
 
 ## Runtime Paths
 
@@ -30,6 +30,12 @@ Observability path:
 API, worker, exporters, and n8n -> Prometheus scrape -> Grafana dashboards
 ```
 
+Verification path:
+
+```text
+local phase gate -> GitHub Actions definition -> hosted CI run after push -> release evidence
+```
+
 ## Boundaries
 
 - Presentation layer owns FastAPI routers and Next.js screens.
@@ -40,6 +46,7 @@ API, worker, exporters, and n8n -> Prometheus scrape -> Grafana dashboards
 - Infrastructure layer owns database, Redis, MinIO, provider clients, and Docker wiring.
 - Observability layer owns logs, metrics, dashboards, and release evidence.
 - Automation layer owns n8n workflows outside the synchronous chat path.
+- CI/CD layer owns local workflow validation and hosted GitHub Actions definitions.
 
 ## Production Guardrails
 
@@ -49,3 +56,13 @@ API, worker, exporters, and n8n -> Prometheus scrape -> Grafana dashboards
 - DeepSeek defaults to `https://api.deepseek.com`, `deepseek-v4-flash`, and Responses API mode.
 - Live provider tests are opt-in and use synthetic public input only.
 - Production readiness uses separate local, CI, live-provider, deployed, backup/restore, and observability gates.
+
+## Navigation
+
+- Ingestion: [Ingestion pipeline](../rag/ingestion-pipeline.md)
+- Retrieval and evaluation: [Hybrid retrieval and reranking pipeline](../rag/retrieval-pipeline.md)
+- Agent and provider boundary: [Agent and LLM gateway architecture](../agent/agent-architecture.md)
+- n8n: [n8n workflow contract](../n8n/workflows.md)
+- Metrics and dashboards: [Metrics and observability](../observability/metrics.md)
+- Containers: [Docker deployment notes](../deployment/docker.md)
+- Security: [Threat model](../security/threat-model.md)

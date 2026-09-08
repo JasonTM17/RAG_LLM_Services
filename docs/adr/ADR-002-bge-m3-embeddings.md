@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-06): implementation begins with Phase 02; rationale recorded in docs/adr/ADR-007-toolchain.md context.
+Accepted. Current implementation uses an embedding provider boundary with BGE-M3 as the production-shaped default and deterministic fake embeddings for tests.
 
 ## Context
 
@@ -23,3 +23,7 @@ Use an `EmbeddingProvider` interface with BAAI/bge-m3 as the default local embed
 - DeepSeek chat model as embeddings: rejected.
 - OpenAI embeddings: compatible future provider, not default for v1.
 - Local-only random vectors: allowed only for tests, never production behavior.
+
+## Larger-Scale Path
+
+Add provider-specific adapters only behind the `EmbeddingProvider` interface. Compare candidate models through the fixture evaluation path and a larger offline benchmark before changing defaults, and keep model downloads, GPU placement, and cold-start cost out of the synchronous API path.

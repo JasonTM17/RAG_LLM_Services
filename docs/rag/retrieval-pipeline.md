@@ -2,7 +2,7 @@
 
 ## Overview
 
-Phase 05 establishes the production-grade hybrid retrieval and reranking engine for the RAG LLM Services platform. The engine fuses semantic dense retrieval (pgvector cosine similarity) with lexical full-text search (PostgreSQL `to_tsvector` and `websearch_to_tsquery`) through Reciprocal Rank Fusion (RRF), optional neural reranking, and bounded, source-labeled context selection.
+The retrieval engine fuses semantic dense retrieval with lexical full-text search through Reciprocal Rank Fusion, optional reranking, and bounded source-labeled context selection. It consumes only indexed current-version chunks produced by the [ingestion pipeline](ingestion-pipeline.md).
 
 ## Pipeline Architecture
 
@@ -110,8 +110,7 @@ Primary files:
 
 ## Evaluation Framework
 
-Phase 12 adds a fixture-safe evaluation path that can run without paid provider
-calls:
+The fixture-safe evaluation path can run without paid provider calls:
 
 - Baseline dataset: `evals/datasets/baseline-learning-rag.jsonl`.
 - Dataset fields: `question`, `expected_answer`, `expected_sources`,

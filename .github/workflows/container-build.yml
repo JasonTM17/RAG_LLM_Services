@@ -1,0 +1,39 @@
+name: Container Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOCKER_BUILDKIT: "1"
+
+jobs:
+  build:
+    name: Build API, worker, and web images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Docker version
+        run: docker version
+
+      - name: Build API image
+        run: docker build --pull -f apps/api/Dockerfile -t rag-llm-services-api:ci .
+
+      - name: Build worker image
+        run: docker build --pull -f apps/worker/Dockerfile -t rag-llm-services-worker:ci .
+
+      - name: Build web image
+        run: docker build --pull -f apps/web/Dockerfile -t rag-llm-services-web:ci .
+
+      - name: Validate compose topology
+        run: docker compose --profile api --profile worker --profile web --profile observability --profile container-observability config --quiet

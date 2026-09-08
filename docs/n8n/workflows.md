@@ -1,6 +1,6 @@
 # n8n Workflow Contract
 
-Phase 09 source-controls five n8n exports under `workflows/n8n/`. They are orchestration workflows only: chat endpoints remain served directly by the API and LLM gateway.
+The repository source-controls five n8n exports under `workflows/n8n/`. They are orchestration workflows only: chat endpoints remain served directly by the API and LLM gateway.
 
 ## Workflow Exports
 

@@ -5,11 +5,11 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/package.json
+COPY apps/web apps/web
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
-
-COPY apps/web apps/web
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @rag-llm-services/web build
 
 FROM node:24.12.0-bookworm-slim AS runner
