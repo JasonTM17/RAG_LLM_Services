@@ -29,6 +29,9 @@ document upload
 
 - Owner scope is resolved server-side and must survive every API, queue, and worker boundary.
 - Re-indexing replaces chunks for the current document version, so retries do not append duplicate citeable context.
+- Workers claim ingestion jobs before parsing. Duplicate active tasks skip while
+  the lease is fresh, Celery retry attempts for the same task may continue, and
+  stale active jobs can be reclaimed after `INGESTION_JOB_STALE_AFTER_SECONDS`.
 - Parser output is source data, not instructions. Chat and agent prompts wrap retrieved content as untrusted context before model calls.
 - The default test and CI path uses deterministic local providers. Live provider behavior is a separate opt-in gate.
 - Raw documents and raw chunk text are not valid log or metric labels.

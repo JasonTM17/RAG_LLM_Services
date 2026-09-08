@@ -65,6 +65,7 @@ KNOWN_ENV_VARS = frozenset(
         "INGESTION_TASK_RETRY_BACKOFF_SECONDS",
         "INGESTION_TASK_RETRY_BACKOFF_MAX_SECONDS",
         "INGESTION_TASK_RETRY_JITTER",
+        "INGESTION_JOB_STALE_AFTER_SECONDS",
         "QUEUE_VISIBILITY_TIMEOUT_SECONDS",
         "RETRIEVAL_CACHE_TTL_SECONDS",
         "WORKER_POOL",
@@ -308,6 +309,9 @@ class QueueSettings(BaseSettings):
         300, ge=1, le=86400, validation_alias="INGESTION_TASK_RETRY_BACKOFF_MAX_SECONDS"
     )
     ingestion_task_retry_jitter: bool = Field(True, validation_alias="INGESTION_TASK_RETRY_JITTER")
+    ingestion_job_stale_after_seconds: int = Field(
+        3600, ge=60, le=86400, validation_alias="INGESTION_JOB_STALE_AFTER_SECONDS"
+    )
     visibility_timeout_seconds: int = Field(
         3600, ge=60, le=86400, validation_alias="QUEUE_VISIBILITY_TIMEOUT_SECONDS"
     )

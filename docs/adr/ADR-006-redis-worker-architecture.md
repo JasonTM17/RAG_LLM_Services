@@ -18,6 +18,9 @@ Default in-process settings use a memory queue for tests and offline local impor
 
 - Upload requests return metadata, job IDs, and queue task IDs without parsing or embedding in the request.
 - Worker jobs are version-aware and safe to retry because chunk replacement is idempotent.
+- Ingestion workers use an application-level stale active-job lease. Fresh
+  duplicate tasks skip, Celery retry attempts for the same task may continue,
+  and stale active jobs are reclaimable after `INGESTION_JOB_STALE_AFTER_SECONDS`.
 - Celery supplies mature retry/backoff controls, JSON serialization, queue routing, Redis visibility timeout support, and familiar Docker Compose operations.
 - Queue depth and job lifecycle metrics become release evidence.
 - The API remains decoupled from Celery primitives through the queue port.
@@ -34,7 +37,7 @@ Default in-process settings use a memory queue for tests and offline local impor
 
 ## Larger-Scale Path
 
-Split ingestion, evaluation, and maintenance onto separate queues when throughput or isolation requires it. Add dead-letter handling, ingestion-specific stale-job recovery, worker autoscaling, and deployment-specific tracing before claiming production reliability for long-running background work.
+Split ingestion, evaluation, and maintenance onto separate queues when throughput or isolation requires it. Add dead-letter handling, worker autoscaling, and deployment-specific tracing before claiming production reliability for long-running background work.
 
 ## References
 

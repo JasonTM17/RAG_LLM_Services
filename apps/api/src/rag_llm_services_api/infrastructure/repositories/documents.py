@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -224,20 +227,59 @@ class DocumentRepository:
         await self._session.refresh(job)
         return job
 
-    async def record_ingestion_job_attempt(
+    async def claim_ingestion_job_attempt(
         self,
         *,
         owner_id: UUID,
         job_id: UUID,
         task_id: str | None = None,
-    ) -> IngestionJobModel | None:
-        """Increment the durable worker attempt counter for a job."""
-        job = await self.get_ingestion_job(owner_id, job_id)
-        if job is None:
-            return None
-        job.attempt_count += 1
+        stale_before: datetime | None = None,
+        retry_attempt: bool = False,
+    ) -> tuple[IngestionJobModel | None, bool]:
+        """Atomically claim a pending, legitimate retry, or stale active ingestion job."""
+        active_status = IngestionJobModel.status.in_(
+            (
+                IngestionJobStatus.PROCESSING.value,
+                IngestionJobStatus.PARSING.value,
+                IngestionJobStatus.CHUNKING.value,
+                IngestionJobStatus.EMBEDDING.value,
+            )
+        )
+        claimable_status = IngestionJobModel.status == IngestionJobStatus.PENDING.value
+        if retry_attempt and task_id is not None:
+            claimable_status = or_(
+                claimable_status,
+                and_(active_status, IngestionJobModel.queued_task_id == task_id),
+            )
+        if stale_before is not None:
+            claimable_status = or_(
+                claimable_status,
+                and_(active_status, IngestionJobModel.updated_at < stale_before),
+            )
+
+        values = {
+            "status": IngestionJobStatus.PROCESSING.value,
+            "error_message": None,
+            "attempt_count": IngestionJobModel.attempt_count + 1,
+            "updated_at": func.now(),
+        }
         if task_id is not None:
-            job.queued_task_id = task_id
-        await self._session.flush()
-        await self._session.refresh(job)
-        return job
+            values["queued_task_id"] = task_id
+
+        stmt = (
+            update(IngestionJobModel)
+            .where(
+                IngestionJobModel.id == job_id,
+                IngestionJobModel.owner_id == owner_id,
+                claimable_status,
+            )
+            .values(**values)
+        )
+        result = cast(
+            CursorResult[Any],
+            await self._session.execute(stmt.execution_options(synchronize_session=False)),
+        )
+        job = await self.get_ingestion_job(owner_id, job_id)
+        if job is not None:
+            await self._session.refresh(job)
+        return job, bool(result.rowcount)

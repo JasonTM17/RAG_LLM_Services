@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from typing import BinaryIO
 
 import pytest
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import rag_llm_services_api.db.models  # noqa: F401
 from rag_llm_services_api.core.config import Settings
 from rag_llm_services_api.core.errors import NotFoundError
 from rag_llm_services_api.db.base import Base
+from rag_llm_services_api.db.models.ingestion_job import IngestionJobModel
 from rag_llm_services_api.domain.documents import DocumentStatus, IngestionJobStatus
 from rag_llm_services_api.infrastructure.queue.base import IngestionTaskPayload
 from rag_llm_services_api.infrastructure.repositories.chunks import ChunkRepository
@@ -174,6 +177,110 @@ async def test_worker_indexes_document_and_skips_duplicate_task(worker_env) -> N
         )
 
 
+async def test_worker_skips_active_processing_job_before_lease_expires(worker_env) -> None:
+    session_maker, storage, settings, owner_id = worker_env
+    payload = await _seed_document(
+        session_maker=session_maker,
+        storage=storage,
+        owner_id=owner_id,
+        content=b"active worker should keep owning this ingestion attempt",
+    )
+
+    async with session_maker() as session:
+        doc_repo = DocumentRepository(session)
+        await doc_repo.update_document_status(
+            owner_id,
+            payload.document_id,
+            DocumentStatus.PROCESSING.value,
+        )
+        await doc_repo.update_ingestion_job_status(
+            owner_id,
+            payload.job_id,
+            IngestionJobStatus.PROCESSING.value,
+        )
+        await session.execute(
+            update(IngestionJobModel)
+            .where(IngestionJobModel.id == payload.job_id)
+            .values(updated_at=datetime.now(UTC))
+        )
+        await session.commit()
+
+    result = await run_ingestion_task_once(
+        payload,
+        settings=settings,
+        session_maker=session_maker,
+        object_storage=storage,
+        embedding_provider=FakeEmbeddingProvider(dimension=1024),
+    )
+
+    assert result.status == "SKIPPED"
+    assert result.attempt_count == 0
+    assert result.chunk_count == 0
+
+    async with session_maker() as session:
+        doc_repo = DocumentRepository(session)
+        chunk_repo = ChunkRepository(session)
+        job = await doc_repo.get_ingestion_job(owner_id, payload.job_id)
+        doc = await doc_repo.get_document_by_id(owner_id, payload.document_id)
+        assert job is not None
+        assert doc is not None
+        assert job.status == IngestionJobStatus.PROCESSING.value
+        assert doc.status == DocumentStatus.PROCESSING.value
+        assert job.attempt_count == 0
+        assert await chunk_repo.count_chunks_by_version(owner_id, payload.version_id) == 0
+
+
+async def test_worker_reclaims_stale_processing_job(worker_env) -> None:
+    session_maker, storage, settings, owner_id = worker_env
+    settings.queue.ingestion_job_stale_after_seconds = 60
+    payload = await _seed_document(
+        session_maker=session_maker,
+        storage=storage,
+        owner_id=owner_id,
+        content=b"stale worker lease can be reclaimed by another ingestion task",
+    )
+
+    async with session_maker() as session:
+        doc_repo = DocumentRepository(session)
+        await doc_repo.update_document_status(
+            owner_id,
+            payload.document_id,
+            DocumentStatus.PROCESSING.value,
+        )
+        await doc_repo.update_ingestion_job_status(
+            owner_id,
+            payload.job_id,
+            IngestionJobStatus.PROCESSING.value,
+        )
+        await session.execute(
+            update(IngestionJobModel)
+            .where(IngestionJobModel.id == payload.job_id)
+            .values(updated_at=datetime.now(UTC) - timedelta(seconds=120))
+        )
+        await session.commit()
+
+    result = await run_ingestion_task_once(
+        payload,
+        settings=settings,
+        session_maker=session_maker,
+        object_storage=storage,
+        embedding_provider=FakeEmbeddingProvider(dimension=1024),
+    )
+
+    assert result.status == DocumentStatus.INDEXED.value
+    assert result.attempt_count == 1
+    assert result.chunk_count > 0
+
+    async with session_maker() as session:
+        doc_repo = DocumentRepository(session)
+        job = await doc_repo.get_ingestion_job(owner_id, payload.job_id)
+        doc = await doc_repo.get_document_by_id(owner_id, payload.document_id)
+        assert job is not None
+        assert doc is not None
+        assert job.status == IngestionJobStatus.INDEXED.value
+        assert doc.status == DocumentStatus.INDEXED.value
+
+
 async def test_worker_failed_ingestion_records_safe_error(worker_env) -> None:
     session_maker, storage, settings, owner_id = worker_env
     payload = await _seed_document(
@@ -255,6 +362,7 @@ async def test_worker_non_final_failure_stays_retryable_until_retry_succeeds(wor
         session_maker=session_maker,
         object_storage=storage,
         embedding_provider=FakeEmbeddingProvider(dimension=1024),
+        retry_attempt=True,
     )
 
     assert result.status == DocumentStatus.INDEXED.value

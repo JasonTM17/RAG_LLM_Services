@@ -32,6 +32,9 @@ The worker service receives the `EVAL_*` variables used by the Phase 12
 evaluation runner, including dataset path, report directory, top K, and
 thresholds. Evaluation tasks share the configured Celery/Redis queue with
 ingestion tasks and write generated reports to the mounted project workspace.
+`INGESTION_JOB_STALE_AFTER_SECONDS` controls when an active ingestion job may be
+reclaimed after a worker crash; fresh duplicate tasks skip so an active worker
+keeps ownership.
 
 The web service receives `RAG_BACKEND_ORIGIN`, which is consumed only by
 Next.js server-side rewrites. Browser code uses same-origin `/api/v1/*` and

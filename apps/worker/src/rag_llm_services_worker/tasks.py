@@ -7,6 +7,7 @@ import logging
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -126,6 +127,10 @@ def _result_from_payload(
     )
 
 
+def _ingestion_stale_before(settings: Settings) -> datetime:
+    return datetime.now(UTC) - timedelta(seconds=settings.queue.ingestion_job_stale_after_seconds)
+
+
 async def _persist_status(
     *,
     session: AsyncSession,
@@ -159,6 +164,7 @@ async def run_ingestion_task_once(
     embedding_provider: EmbeddingProvider | None = None,
     final_attempt: bool = True,
     raise_on_failed_result: bool = False,
+    retry_attempt: bool = False,
 ) -> WorkerIngestionResult:
     """Run one ingestion payload with durable status and metrics updates."""
     cfg = settings or get_settings()
@@ -191,48 +197,59 @@ async def run_ingestion_task_once(
                     attempt_count=job.attempt_count,
                 )
             else:
-                attempt_job = await doc_repo.record_ingestion_job_attempt(
+                attempt_job, claimed = await doc_repo.claim_ingestion_job_attempt(
                     owner_id=payload.owner_id,
                     job_id=payload.job_id,
                     task_id=payload.task_id,
+                    stale_before=_ingestion_stale_before(cfg),
+                    retry_attempt=retry_attempt,
                 )
                 if attempt_job is None:
                     raise NotFoundError("Ingestion job not found")
-                attempt_count = attempt_job.attempt_count
-                await session.commit()
-
-                pipeline = IngestionPipeline(
-                    object_storage=object_storage or get_object_storage(cfg),
-                    document_repo=doc_repo,
-                    chunk_repo=chunk_repo,
-                    embedding_provider=embedding_provider or get_embedding_provider(cfg),
-                )
-                result = await pipeline.ingest_document(
-                    owner_id=payload.owner_id,
-                    document_id=payload.document_id,
-                    version_id=payload.version_id,
-                    job_id=payload.job_id,
-                    persist_failure=final_attempt,
-                )
-                if result.status == DocumentStatus.FAILED and not final_attempt:
-                    await _persist_status(
-                        session=session,
-                        payload=payload,
-                        document_status=DocumentStatus.PROCESSING,
-                        job_status=IngestionJobStatus.PROCESSING,
-                        error_message=result.error_message or "Ingestion retry pending",
+                if not claimed:
+                    task_result = _result_from_payload(
+                        payload,
+                        status="SKIPPED",
+                        chunk_count=0,
+                        attempt_count=attempt_job.attempt_count,
+                        error_message=attempt_job.error_message,
                     )
                 else:
+                    attempt_count = attempt_job.attempt_count
                     await session.commit()
-                task_result = _result_from_payload(
-                    payload,
-                    status=RETRYING_STATUS
-                    if result.status == DocumentStatus.FAILED and not final_attempt
-                    else result.status.value,
-                    chunk_count=result.chunk_count,
-                    attempt_count=attempt_count,
-                    error_message=result.error_message,
-                )
+
+                    pipeline = IngestionPipeline(
+                        object_storage=object_storage or get_object_storage(cfg),
+                        document_repo=doc_repo,
+                        chunk_repo=chunk_repo,
+                        embedding_provider=embedding_provider or get_embedding_provider(cfg),
+                    )
+                    result = await pipeline.ingest_document(
+                        owner_id=payload.owner_id,
+                        document_id=payload.document_id,
+                        version_id=payload.version_id,
+                        job_id=payload.job_id,
+                        persist_failure=final_attempt,
+                    )
+                    if result.status == DocumentStatus.FAILED and not final_attempt:
+                        await _persist_status(
+                            session=session,
+                            payload=payload,
+                            document_status=DocumentStatus.PROCESSING,
+                            job_status=IngestionJobStatus.PROCESSING,
+                            error_message=result.error_message or "Ingestion retry pending",
+                        )
+                    else:
+                        await session.commit()
+                    task_result = _result_from_payload(
+                        payload,
+                        status=RETRYING_STATUS
+                        if result.status == DocumentStatus.FAILED and not final_attempt
+                        else result.status.value,
+                        chunk_count=result.chunk_count,
+                        attempt_count=attempt_count,
+                        error_message=result.error_message,
+                    )
         except Exception as exc:  # noqa: BLE001 - persist any worker failure to job state
             await session.rollback()
             error_message = safe_ingestion_error(exc)
@@ -405,6 +422,7 @@ def ingest_document(self: object, **kwargs: str) -> Mapping[str, Any]:
             payload,
             final_attempt=final_attempt,
             raise_on_failed_result=not final_attempt,
+            retry_attempt=current_retries > 0,
         )
     ).to_dict()
 
