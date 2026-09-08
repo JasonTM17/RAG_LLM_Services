@@ -5,9 +5,18 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      publish_version:
+        description: Version tag to publish to GHCR (e.g. v0.1.0). Empty runs build and validation only.
+        required: false
+        default: ""
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: container-build-${{ github.ref }}
@@ -37,3 +46,28 @@ jobs:
 
       - name: Validate compose topology
         run: docker compose --profile api --profile worker --profile web --profile observability --profile container-observability config --quiet
+
+      # Publish only on version tags, and only after the build and topology
+      # validation steps above have succeeded. Images inherit repository
+      # visibility (public here); `.dockerignore` keeps `.env` out of layers.
+      - name: Publish images to GitHub Container Registry
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish_version != ''
+        env:
+          REGISTRY: ghcr.io
+          IMAGE_NAMESPACE: ${{ github.repository_owner }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_version || github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u "$GITHUB_ACTOR" --password-stdin
+          NAMESPACE="${IMAGE_NAMESPACE,,}"
+          VERSION="$PUBLISH_VERSION"
+          for service in api worker web; do
+            image="$REGISTRY/$NAMESPACE/rag-llm-services-$service"
+            docker tag "rag-llm-services-$service:ci" "$image:$VERSION"
+            docker push "$image:$VERSION"
+            if [[ "$VERSION" != *-* ]]; then
+              docker tag "rag-llm-services-$service:ci" "$image:latest"
+              docker push "$image:latest"
+            fi
+          done
