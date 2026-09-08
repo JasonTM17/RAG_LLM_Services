@@ -10,6 +10,8 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG RAG_BACKEND_ORIGIN=http://api:8000
+ENV RAG_BACKEND_ORIGIN=${RAG_BACKEND_ORIGIN}
 RUN pnpm --filter @rag-llm-services/web build
 
 FROM node:24.12.0-bookworm-slim AS runner

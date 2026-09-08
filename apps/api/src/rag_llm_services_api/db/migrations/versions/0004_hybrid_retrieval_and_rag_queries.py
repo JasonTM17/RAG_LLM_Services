@@ -1,6 +1,6 @@
 """Add full-text search GIN index on document_chunks and create rag_queries table.
 
-Revision ID: 0004_hybrid_retrieval_and_rag_queries
+Revision ID: 0004_hybrid_retrieval
 Revises: 0003_document_chunks_pgvector
 Create Date: 2026-09-07
 
@@ -13,7 +13,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "0004_hybrid_retrieval_and_rag_queries"
+revision: str = "0004_hybrid_retrieval"
 down_revision: str | None = "0003_document_chunks_pgvector"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

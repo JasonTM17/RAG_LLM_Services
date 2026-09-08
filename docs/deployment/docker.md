@@ -44,6 +44,26 @@ default to an in-memory limiter so tests run offline, while `.env.example` sets
 `RATE_LIMIT_BACKEND=redis` for Compose and production-shaped runs. Production
 mode fails closed if rate limiting is disabled or not backed by Redis.
 
+## Backup and Restore Dry Runs
+
+Backups are a release readiness gate, not a side effect of local development.
+Run the non-mutating dry-run checks before claiming release readiness:
+
+```powershell
+make backup-dry-run
+make restore-dry-run
+```
+
+The dry runs validate the compose service and volume topology for Postgres,
+MinIO, n8n, Prometheus, and Grafana without exporting or restoring data.
+Production backup execution must use encrypted artifacts, external secret
+custody, checksum recording, and an isolated restore rehearsal.
+
+Rollback starts by stopping write paths (`api`, `worker`, `n8n`, and `web`)
+without deleting volumes, restoring the previous image tags or commit checkout,
+restoring the last verified Postgres and MinIO backup pair, then re-running
+health, retrieval, citation, metrics, n8n, Grafana, and acceptance checks.
+
 ## Readiness Gates
 
 - GitHub workflow contracts validate locally.
@@ -60,6 +80,9 @@ mode fails closed if rate limiting is disabled or not backed by Redis.
 - Security verifier passes: prompt-injection, upload abuse, citation abuse,
   secret/logging scan, SQL parameterization scan, dependency scan, and affected
   API tests.
+- Release readiness runs `make acceptance-demo`, `make backup-dry-run`,
+  `make restore-dry-run`, and `make compose-smoke`; external push, hosted CI,
+  live DeepSeek, registry publication, and deployment remain separate gates.
 
 ## n8n
 
@@ -115,9 +138,12 @@ Start the Next.js frontend in the `web` profile:
 docker compose --profile web up web
 ```
 
-Open `http://localhost:${WEB_PORT:-3001}`. For direct local development, run
-`make api-run` in one terminal and `pnpm web:dev` in another; the dev server
-uses port `3000` unless overridden by Next.js CLI flags.
+Open `http://localhost:${WEB_PORT:-3001}`. The compose web profile builds and
+runs the standalone Next.js image, with server-side rewrites pointing at
+`RAG_BACKEND_ORIGIN` during image build. The compose default is `http://api:8000`.
+For direct local development, run `make api-run` in one terminal and
+`pnpm web:dev` in another; the dev server uses port `3000` unless overridden by
+Next.js CLI flags.
 
 ## API and Worker Images
 
@@ -128,8 +154,10 @@ development defaults unless `.env` overrides them:
 docker compose --profile api up api
 ```
 
-The `worker` profile remains queue-backed and can be started independently once
-Postgres, Redis, and MinIO are available:
+The `worker` profile builds and runs the worker image instead of bind-mounting
+the workspace. This prevents a Linux container from rewriting the host virtual
+environment during release smoke tests. It remains queue-backed and can be
+started independently once Postgres, Redis, and MinIO are available:
 
 ```powershell
 docker compose --profile worker up worker

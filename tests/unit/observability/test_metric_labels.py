@@ -61,9 +61,10 @@ def test_metric_names_keep_rag_prefix() -> None:
 
 def test_compose_worker_uses_shared_process_pool_for_scraped_metrics() -> None:
     compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    dockerfile = (REPO_ROOT / "apps" / "worker" / "Dockerfile").read_text(encoding="utf-8")
 
     assert "WORKER_POOL: ${WORKER_POOL:-threads}" in compose
     assert "WORKER_METRICS_PORT: 9108" in compose
     assert '"${WORKER_METRICS_HOST_PORT:-9108}:9108"' in compose
-    assert "--pool=$${WORKER_POOL:-threads}" in compose
-    assert "--concurrency=$${WORKER_CONCURRENCY:-4}" in compose
+    assert "--pool=${WORKER_POOL:-threads}" in dockerfile
+    assert "--concurrency=${WORKER_CONCURRENCY:-4}" in dockerfile

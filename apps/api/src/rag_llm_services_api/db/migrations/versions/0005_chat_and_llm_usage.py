@@ -1,7 +1,7 @@
 """Create locally owned chat conversations, messages, and LLM usage audit rows.
 
 Revision ID: 0005_chat_and_llm_usage
-Revises: 0004_hybrid_retrieval_and_rag_queries
+Revises: 0004_hybrid_retrieval
 Create Date: 2026-09-07
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "0005_chat_and_llm_usage"
-down_revision: str | None = "0004_hybrid_retrieval_and_rag_queries"
+down_revision: str | None = "0004_hybrid_retrieval"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

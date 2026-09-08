@@ -3,7 +3,7 @@ SHELL := powershell
 
 PLAN_DIR := plans/260906-2101-rag-llm-services-production-platform
 
-.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 verify-phase-07 verify-phase-08 verify-phase-09 verify-phase-10 verify-phase-11 verify-phase-12 verify-phase-13 verify-phase-14 verify-phase-15 eval validate-workflows docs-check validate-n8n validate-prometheus validate-grafana check-ignore secret-scan dependency-scan sql-scan container-build web-dev web-build web-lint web-typecheck web-test web-e2e web-verify api-test api-lint api-typecheck api-migrate api-run worker-run acceptance-demo backup-dry-run restore-dry-run
+.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 verify-phase-07 verify-phase-08 verify-phase-09 verify-phase-10 verify-phase-11 verify-phase-12 verify-phase-13 verify-phase-14 verify-phase-15 verify-phase-16 eval validate-workflows docs-check validate-n8n validate-prometheus validate-grafana check-ignore secret-scan dependency-scan sql-scan container-build web-dev web-build web-lint web-typecheck web-test web-e2e web-verify api-test api-lint api-typecheck api-migrate api-run worker-run acceptance-demo backup-dry-run restore-dry-run compose-smoke
 
 help:
 	@Write-Host "RAG_LLM_Services command contract"
@@ -23,6 +23,7 @@ help:
 	@Write-Host "  make verify-phase-13   Run frontend app checks"
 	@Write-Host "  make verify-phase-14   Run security hardening checks"
 	@Write-Host "  make verify-phase-15   Run CI/CD and documentation checks"
+	@Write-Host "  make verify-phase-16   Run release readiness checks"
 	@Write-Host "  make eval              Run the fixture-safe RAG evaluation"
 	@Write-Host "  make validate-workflows Validate GitHub Actions workflow contracts"
 	@Write-Host "  make docs-check        Validate documentation paths, links, and ADR shape"
@@ -91,6 +92,9 @@ verify-phase-14:
 
 verify-phase-15:
 	@.\scripts\verify-phase-15.ps1
+
+verify-phase-16:
+	@.\scripts\verify-phase-16.ps1
 
 eval:
 	@uv run python scripts/run-eval.py
@@ -169,10 +173,13 @@ worker-run:
 	@$$queue = if ($$env:INGESTION_QUEUE_NAME) { $$env:INGESTION_QUEUE_NAME } else { "ingestion" }; uv run celery -A rag_llm_services_worker.main:celery_app worker --loglevel=INFO --queues $$queue
 
 acceptance-demo:
-	@Write-Error "acceptance-demo is introduced after the API, worker, RAG, and observability phases are implemented."; exit 1
+	@uv run python scripts/acceptance-demo.py
 
 backup-dry-run:
-	@Write-Error "backup-dry-run is introduced before production release review."; exit 1
+	@uv run python scripts/backup-dry-run.py
 
 restore-dry-run:
-	@Write-Error "restore-dry-run is introduced before production release review."; exit 1
+	@uv run python scripts/restore-dry-run.py
+
+compose-smoke:
+	@.\scripts\compose-smoke.ps1
