@@ -10,7 +10,7 @@ The local default is safe for development and CI: it uses deterministic fakes fo
 
 Phases 01-16 are implemented locally: repository contract, backend foundation, document storage, ingestion, hybrid retrieval, LLM gateway, study agents, Redis/Celery worker, n8n contracts, Prometheus, Grafana, fixture-safe evaluation, Next.js web app, security hardening, CI/documentation definitions, and release-readiness evidence.
 
-Hosted GitHub Actions are green on the `v0.1.0` pre-release commit `d9162f8` (CI, Security, and Container Build workflows each report success on the pushed commit). The optional live DeepSeek smoke passed on 2026-09-08 with the operator-supplied key (`RUN_DEEPSEEK_LIVE_TESTS=1`, one synthetic prompt, bounded 16-token output); chat and study flows remain mocked by default. The `v0.1.0` api, worker, and web images are published to both the GitHub Container Registry and Docker Hub (see [published release images](#published-release-images)); automatic CI pushes to Docker Hub for future tags still need a dedicated Docker Hub access-token repository secret. Production deployment, production auth, and production backup/restore execution remain `NOT_RUN` or `HOLD` until those external gates are explicitly executed. Local backup/restore dry-runs and compose release smoke pass. See [the v0.1.0 release](https://github.com/JasonTM17/RAG_LLM_Services/releases/tag/v0.1.0).
+Hosted GitHub Actions are green on the `v0.1.0` pre-release commit `d9162f8` (CI, Security, and Container Build workflows each report success on the pushed commit). The optional live DeepSeek smoke passed on 2026-09-08 with the operator-supplied key (`RUN_DEEPSEEK_LIVE_TESTS=1`, one synthetic prompt, bounded 16-token output); chat and study flows remain mocked by default. The `v0.1.0` api, worker, and web images are published to both the GitHub Container Registry and Docker Hub as one-off release artifacts (see [published release images](#published-release-images)); the container operating model is local Docker Compose builds, and CI intentionally performs no registry publishing (maintainer decision of 2026-09-08). Production deployment, production auth, and production backup/restore execution remain `NOT_RUN` or `HOLD` until those external gates are explicitly executed. Local backup/restore dry-runs and compose release smoke pass. See [the v0.1.0 release](https://github.com/JasonTM17/RAG_LLM_Services/releases/tag/v0.1.0).
 
 ## Architecture
 
@@ -164,7 +164,7 @@ docker pull nguyenson1710/rag-llm-services-worker:v0.1.0
 docker pull nguyenson1710/rag-llm-services-web:v0.1.0
 ```
 
-Future `v*` tags publish to GHCR automatically from the Container Build workflow. The Docker Hub mirror for `v0.1.0` was pushed with local credentials; making CI dual-push for future tags requires adding `DOCKERHUB_USERNAME` and a `DOCKERHUB_TOKEN` access-token repository secrets, which is not configured yet.
+These images are one-off public release artifacts for `v0.1.0`. Day-to-day operation builds images locally with `make container-build` and the compose profiles above; CI does not publish to image registries by design (maintainer decision of 2026-09-08). Any future remote publication is an explicit manual operator action, and the deleted tag-triggered publish step is on record in commit `eba44ee` if it is ever wanted again.
 
 More deployment notes live in [Docker deployment notes](docs/deployment/docker.md).
 
@@ -235,7 +235,7 @@ Retrieval and evaluation details are in [Hybrid retrieval and reranking pipeline
 
 ## Security
 
-The local security posture is documented in [Threat model](docs/security/threat-model.md). Production release remains on hold until hosted CI, live-provider, production auth/TLS, secrets, production backup/restore execution, registry publication, and deployment evidence are separately proven.
+The local security posture is documented in [Threat model](docs/security/threat-model.md). Production release remains on hold until hosted CI, live-provider, production auth/TLS, secrets, production backup/restore execution, and deployment evidence are separately proven; registry publication is a manual operator option under the local-first container decision of 2026-09-08.
 
 Run the default security gates with:
 
