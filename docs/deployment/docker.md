@@ -6,15 +6,25 @@ V1 targets Docker Compose, not Kubernetes. Compose is used for local development
 
 ## Services
 
-- `api`: FastAPI application.
-- `worker`: background ingestion and evaluation worker.
-- `web`: Next.js frontend.
+All services below are implemented in `docker-compose.yml`. Five start by default; the rest are opt-in through Compose profiles.
+
+Started by default (no profile):
+
 - `postgres`: PostgreSQL with pgvector.
 - `redis`: queue and cache.
 - `minio`: raw private document object storage.
+- `minio-create-bucket`: one-shot job that creates the `MINIO_BUCKET` bucket when missing.
 - `n8n`: asynchronous automation.
-- `prometheus`: metrics scrape target.
-- `grafana`: provisioned dashboards.
+
+Opt-in through profiles:
+
+- `api` (`api` profile): FastAPI application image.
+- `worker` (`worker` profile): background ingestion and evaluation worker.
+- `web` (`web` profile): Next.js frontend.
+- `prometheus`, `grafana`, `postgres-exporter`, and `redis-exporter` (`observability` profile): metrics scraping and provisioned dashboards.
+- `cadvisor` (`container-observability` profile): optional container metrics.
+
+In day-to-day development the API runs on the host via `make api-run` (uvicorn with `--env-file .env`), not as a compose service; n8n and Prometheus both target the host API at `host.docker.internal:8000`. The `api` compose service exists for container-shaped validation and release smoke tests.
 
 ## Environment
 

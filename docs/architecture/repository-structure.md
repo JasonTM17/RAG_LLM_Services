@@ -19,7 +19,7 @@ packages/
   rag/      Chunking, retrieval, reranking, context building, citations.
   shared/   Cross-application types, errors, and utilities.
 infra/
-  docker/   Compose and container runtime assets.
+  docker/   Placeholder; the compose files live at the repository root.
   prometheus/ Prometheus config and alerting assets.
   grafana/  Provisioned datasources and dashboards.
   n8n/      n8n provisioning notes and safe import assets.
