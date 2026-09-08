@@ -9,9 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 
-- Live DeepSeek provider proof via an explicitly authorized `RUN_DEEPSEEK_LIVE_TESTS` run.
 - Container registry publication (images build green in CI but are not pushed to a registry).
 - Production authentication boundary, TLS, deployment cutover, and production backup/restore execution (all currently `HOLD` or `NOT_RUN`).
+
+### Verified post-release
+
+- Live DeepSeek provider smoke passed on 2026-09-08 via an operator-authorized `RUN_DEEPSEEK_LIVE_TESTS=1` run (single synthetic prompt, 16-token bound); live key containment audited with zero leaks into tracked, untracked, or git-internal artifacts.
 
 ## [0.1.0] - 2026-09-08
 
