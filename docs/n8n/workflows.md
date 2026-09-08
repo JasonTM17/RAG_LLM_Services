@@ -20,6 +20,7 @@ The repository source-controls five n8n exports under `workflows/n8n/`. They are
 - `daily-study-automation.json` does not retry `POST /api/v1/study/flashcards` because Phase 07 study generation creates chat history and LLM output. Workflow failure notification handles that error path.
 - `failure-notification.json` does not retry the optional external notification webhook because the receiver may not support deduplication.
 - Evaluation APIs create idempotent queued runs; the worker executes the fixture-safe Phase 12 runner and persists aggregate metrics/thresholds/report paths in `evaluation_runs`. n8n records the current status as `RUNNING`, `SUCCEEDED`, or `FAILED`; callers that need the final result should keep polling `GET /api/v1/evaluations/{run_id}` until `SUCCEEDED` or `FAILED`.
+- Idempotent evaluation retries do not requeue active `RUNNING` work, but requeue stale `RUNNING` runs after `EVAL_RUN_STALE_AFTER_SECONDS` so a crashed worker does not leave nightly evaluation stuck forever.
 - Evaluation thresholds are controlled by `EVAL_*_THRESHOLD` variables; misses become `FAILED` evaluation runs with result status `FAIL`, not warning-only reports.
 - No workflow may call `POST /api/v1/chat` or `POST /api/v1/chat/stream`.
 
