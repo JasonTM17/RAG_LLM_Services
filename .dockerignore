@@ -33,7 +33,12 @@ venv
 !.env.example
 
 evals/reports/local
-plans/**/reports/
+plans/
+.mimosa/
+.video_agent/
+.tmp/
+.tmp-*/
+.uv-cache/
 __pycache__
 **/__pycache__
 *.py[cod]
