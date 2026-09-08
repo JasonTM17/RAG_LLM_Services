@@ -10,7 +10,7 @@ The local default is safe for development and CI: it uses deterministic fakes fo
 
 Phases 01-16 are implemented locally: repository contract, backend foundation, document storage, ingestion, hybrid retrieval, LLM gateway, study agents, Redis/Celery worker, n8n contracts, Prometheus, Grafana, fixture-safe evaluation, Next.js web app, security hardening, CI/documentation definitions, and release-readiness evidence.
 
-Hosted GitHub Actions, live DeepSeek proof, production deployment, production auth, registry publication, and production backup/restore execution remain `NOT_RUN` or `HOLD` until the repository is pushed and those external gates are explicitly executed. Local backup/restore dry-runs and compose release smoke pass.
+Hosted GitHub Actions are green on the `v0.1.0` pre-release commit `d9162f8` (CI, Security, and Container Build workflows each report success on the pushed commit). Live DeepSeek proof, registry publication, production deployment, production auth, and production backup/restore execution remain `NOT_RUN` or `HOLD` until those external gates are explicitly executed. Local backup/restore dry-runs and compose release smoke pass. See [the v0.1.0 release](https://github.com/JasonTM17/RAG_LLM_Services/releases/tag/v0.1.0).
 
 ## Architecture
 

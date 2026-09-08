@@ -9,13 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 
-- Hosted GitHub Actions CI evidence after the first pushed workflow run (workflow definitions already exist locally).
 - Live DeepSeek provider proof via an explicitly authorized `RUN_DEEPSEEK_LIVE_TESTS` run.
-- Production authentication boundary, TLS, registry publication, deployment cutover, and production backup/restore execution (all currently `HOLD` or `NOT_RUN`).
+- Container registry publication (images build green in CI but are not pushed to a registry).
+- Production authentication boundary, TLS, deployment cutover, and production backup/restore execution (all currently `HOLD` or `NOT_RUN`).
 
 ## [0.1.0] - 2026-09-08
 
-First local release candidate covering phases 01-16 of the implementation plan. All verification is local (`LOCAL_PASS`); hosted CI, live-provider, registry, deployment, and production evidence remain unobserved.
+First public release (pre-release) covering phases 01-16 of the implementation plan, tagged at `d9162f8`. The local release gate `scripts/verify-phase-16.ps1` passes (`303 passed, 1 skipped`); hosted GitHub Actions (CI, Security, Container Build) are green on the tagged commit. Live-provider, registry, deployment, and production evidence remain unobserved.
 
 ### Added
 
