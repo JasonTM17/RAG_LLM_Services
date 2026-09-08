@@ -20,6 +20,11 @@ V1 targets Docker Compose, not Kubernetes. Compose is used for local development
 
 Use `.env` for local runtime secrets and `.env.example` for placeholders. Do not bake secrets into images or committed compose files.
 
+The worker service receives the `EVAL_*` variables used by the Phase 12
+evaluation runner, including dataset path, report directory, top K, and
+thresholds. Evaluation tasks share the configured Celery/Redis queue with
+ingestion tasks and write generated reports to the mounted project workspace.
+
 ## Readiness Gates
 
 - Compose config validates.

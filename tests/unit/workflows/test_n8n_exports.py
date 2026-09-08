@@ -121,3 +121,16 @@ def test_http_nodes_use_retry_policy_matching_idempotency() -> None:
             assert node.get("retryOnFail") is True
             assert 1 <= node.get("maxTries", 0) <= 3
             assert 1000 <= node["waitBetweenTries"] <= 60000
+
+
+def test_nightly_evaluation_report_reflects_evaluation_status() -> None:
+    workflow = json.loads(
+        (WORKFLOW_DIR / "nightly-rag-evaluation.json").read_text(encoding="utf-8")
+    )
+    report_node = next(node for node in workflow["nodes"] if node["id"] == "http-report-evaluation")
+    body = report_node["parameters"]["jsonBody"]
+
+    assert "evaluation_status" in body
+    assert "$json.status === 'FAILED' ? 'FAILED'" in body
+    assert "$json.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'RUNNING'" in body
+    assert "status: 'SUCCEEDED'" not in body

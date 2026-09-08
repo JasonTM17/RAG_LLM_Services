@@ -3,7 +3,7 @@ SHELL := powershell
 
 PLAN_DIR := plans/260906-2101-rag-llm-services-production-platform
 
-.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 verify-phase-07 verify-phase-08 verify-phase-09 verify-phase-10 verify-phase-11 validate-n8n validate-prometheus validate-grafana check-ignore secret-scan api-test api-lint api-typecheck api-migrate api-run worker-run acceptance-demo backup-dry-run restore-dry-run
+.PHONY: help plan-status verify-phase-01 verify-phase-02 verify-phase-03 verify-phase-04 verify-phase-05 verify-phase-06 verify-phase-07 verify-phase-08 verify-phase-09 verify-phase-10 verify-phase-11 verify-phase-12 eval validate-n8n validate-prometheus validate-grafana check-ignore secret-scan api-test api-lint api-typecheck api-migrate api-run worker-run acceptance-demo backup-dry-run restore-dry-run
 
 help:
 	@Write-Host "RAG_LLM_Services command contract"
@@ -19,6 +19,8 @@ help:
 	@Write-Host "  make verify-phase-09   Run n8n workflow and compose checks"
 	@Write-Host "  make verify-phase-10   Run Prometheus metrics and observability checks"
 	@Write-Host "  make verify-phase-11   Run Grafana dashboard and provisioning checks"
+	@Write-Host "  make verify-phase-12   Run RAG evaluation framework checks"
+	@Write-Host "  make eval              Run the fixture-safe RAG evaluation"
 	@Write-Host "  make validate-n8n      Validate source-controlled n8n workflow exports"
 	@Write-Host "  make validate-prometheus Validate Prometheus scrape and alert contracts"
 	@Write-Host "  make validate-grafana  Validate Grafana provisioning and dashboards"
@@ -66,6 +68,12 @@ verify-phase-10:
 
 verify-phase-11:
 	@.\scripts\verify-phase-11.ps1
+
+verify-phase-12:
+	@.\scripts\verify-phase-12.ps1
+
+eval:
+	@uv run python scripts/run-eval.py
 
 validate-n8n:
 	@uv run python scripts/validate-n8n-workflows.py

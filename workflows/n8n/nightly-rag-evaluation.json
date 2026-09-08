@@ -89,7 +89,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ workflow_name: 'nightly-rag-evaluation', run_id: $execution.id, status: 'SUCCEEDED', summary: 'Nightly evaluation trigger recorded', payload: { evaluation_run_id: $json.id, evaluation_status: $json.status, dataset_name: $json.dataset_name } }) }}",
+        "jsonBody": "={{ JSON.stringify({ workflow_name: 'nightly-rag-evaluation', run_id: $execution.id, status: $json.status === 'FAILED' ? 'FAILED' : $json.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'RUNNING', summary: 'Nightly evaluation status poll completed', payload: { evaluation_run_id: $json.id, evaluation_status: $json.status, dataset_name: $json.dataset_name, report_path: $json.report_path, result: $json.result } }) }}",
         "options": {
           "timeout": 10000
         }

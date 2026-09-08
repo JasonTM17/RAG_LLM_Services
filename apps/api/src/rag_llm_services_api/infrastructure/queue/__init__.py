@@ -5,7 +5,9 @@ from __future__ import annotations
 from rag_llm_services_api.core.config import Settings, get_settings
 from rag_llm_services_api.core.errors import ConfigurationError
 from rag_llm_services_api.infrastructure.queue.base import (
+    EVALUATION_TASK_NAME,
     INGESTION_TASK_NAME,
+    EvaluationTaskPayload,
     IngestionTaskPayload,
     MemoryTaskQueue,
     QueueEnqueueResult,
@@ -31,7 +33,9 @@ def get_task_queue() -> TaskQueue:
 
 
 __all__ = [
+    "EVALUATION_TASK_NAME",
     "INGESTION_TASK_NAME",
+    "EvaluationTaskPayload",
     "IngestionTaskPayload",
     "MemoryTaskQueue",
     "QueueEnqueueResult",

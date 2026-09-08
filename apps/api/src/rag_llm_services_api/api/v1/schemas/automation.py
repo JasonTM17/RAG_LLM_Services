@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 _SECRET_SHAPED_RE = re.compile(
     r"(sk-[A-Za-z0-9]{20,}|gh[po]_[A-Za-z0-9]{30,}|Bearer\s+[A-Za-z0-9._\-]{20,})"
 )
+_DATASET_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$")
 
 
 def _reject_secret_shaped_values(value: Any) -> Any:
@@ -71,12 +72,12 @@ class AutomationReportResponse(BaseModel):
 
 
 class EvaluationCreateRequest(BaseModel):
-    """Minimal evaluation trigger request used by n8n until Phase 12."""
+    """Evaluation trigger request used by n8n or API clients."""
 
     trigger_source: Literal["api", "n8n"] = "api"
     idempotency_key: str | None = Field(default=None, max_length=120)
     workflow_name: str | None = Field(default=None, max_length=120)
-    dataset_name: str | None = Field(default="baseline-learning-rag", max_length=120)
+    dataset_name: str | None = Field(default=None, max_length=120)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("metadata")
@@ -91,9 +92,19 @@ class EvaluationCreateRequest(BaseModel):
             _reject_secret_shaped_values(value)
         return value
 
+    @field_validator("dataset_name")
+    @classmethod
+    def _dataset_name_is_safe_stem(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        normalized = value.strip()
+        if not _DATASET_NAME_RE.match(normalized):
+            raise ValueError("dataset_name must be a safe dataset stem")
+        return normalized
+
 
 class EvaluationRunResponse(BaseModel):
-    """Evaluation trigger/status response."""
+    """Evaluation trigger/status response with safe aggregate result details."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -107,5 +118,6 @@ class EvaluationRunResponse(BaseModel):
     report_path: str | None = None
     error_message: str | None = None
     metadata_json: dict[str, Any]
+    result: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime

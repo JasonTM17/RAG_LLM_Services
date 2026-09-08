@@ -130,6 +130,7 @@ async def test_evaluation_trigger_and_status_are_owner_scoped(automation_env) ->
     assert created["trigger_source"] == "n8n"
     assert created["idempotency_key"] == "nightly-execution-001"
     assert created["workflow_name"] == "nightly-rag-evaluation"
+    assert created["result"] is None
 
     run_id = created["id"]
     status_response = await client.get(f"/api/v1/evaluations/{run_id}")
@@ -166,3 +167,4 @@ async def test_evaluation_trigger_retry_is_idempotent_per_owner(automation_env) 
     assert other_owner.status_code == 202
     assert second.json()["id"] == first.json()["id"]
     assert other_owner.json()["id"] != first.json()["id"]
+    assert second.json()["status"] == "PENDING"

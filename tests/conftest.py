@@ -36,6 +36,7 @@ _SCRUB_PREFIXES = (
     "GENERIC_",
     "PROMETHEUS_",
     "GRAFANA_",
+    "EVAL_",
     "NEXT_PUBLIC_",
     "LOG_LEVEL",
 )

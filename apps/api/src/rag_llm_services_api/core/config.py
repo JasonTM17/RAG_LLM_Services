@@ -138,6 +138,18 @@ KNOWN_ENV_VARS = frozenset(
         "GRAFANA_BASE_URL",
         "GRAFANA_ADMIN_USER",
         "GRAFANA_ADMIN_PASSWORD",
+        "EVAL_DATASET_PATH",
+        "EVAL_REPORTS_DIR",
+        "EVAL_TOP_K",
+        "EVAL_RETRIEVAL_HIT_RATE_THRESHOLD",
+        "EVAL_RECALL_AT_K_THRESHOLD",
+        "EVAL_MRR_THRESHOLD",
+        "EVAL_NDCG_AT_K_THRESHOLD",
+        "EVAL_CONTEXT_RELEVANCE_THRESHOLD",
+        "EVAL_ANSWER_RELEVANCE_THRESHOLD",
+        "EVAL_CITATION_CORRECTNESS_THRESHOLD",
+        "EVAL_CITATION_RECALL_THRESHOLD",
+        "EVAL_FAITHFULNESS_THRESHOLD",
         "NEXT_PUBLIC_API_BASE_URL",
     }
 )
@@ -521,6 +533,44 @@ class ObservabilitySettings(BaseSettings):
     )
 
 
+class EvaluationSettings(BaseSettings):
+    """Deterministic RAG evaluation defaults and regression thresholds."""
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    dataset_path: str = Field(
+        "evals/datasets/baseline-learning-rag.jsonl",
+        validation_alias="EVAL_DATASET_PATH",
+    )
+    reports_dir: str = Field("evals/reports/local", validation_alias="EVAL_REPORTS_DIR")
+    top_k: int = Field(5, ge=1, le=100, validation_alias="EVAL_TOP_K")
+    retrieval_hit_rate_threshold: float = Field(
+        1.0, ge=0.0, le=1.0, validation_alias="EVAL_RETRIEVAL_HIT_RATE_THRESHOLD"
+    )
+    recall_at_k_threshold: float = Field(
+        0.8, ge=0.0, le=1.0, validation_alias="EVAL_RECALL_AT_K_THRESHOLD"
+    )
+    mrr_threshold: float = Field(0.8, ge=0.0, le=1.0, validation_alias="EVAL_MRR_THRESHOLD")
+    ndcg_at_k_threshold: float = Field(
+        0.8, ge=0.0, le=1.0, validation_alias="EVAL_NDCG_AT_K_THRESHOLD"
+    )
+    context_relevance_threshold: float = Field(
+        0.5, ge=0.0, le=1.0, validation_alias="EVAL_CONTEXT_RELEVANCE_THRESHOLD"
+    )
+    answer_relevance_threshold: float = Field(
+        0.65, ge=0.0, le=1.0, validation_alias="EVAL_ANSWER_RELEVANCE_THRESHOLD"
+    )
+    citation_correctness_threshold: float = Field(
+        1.0, ge=0.0, le=1.0, validation_alias="EVAL_CITATION_CORRECTNESS_THRESHOLD"
+    )
+    citation_recall_threshold: float = Field(
+        0.8, ge=0.0, le=1.0, validation_alias="EVAL_CITATION_RECALL_THRESHOLD"
+    )
+    faithfulness_threshold: float = Field(
+        0.6, ge=0.0, le=1.0, validation_alias="EVAL_FAITHFULNESS_THRESHOLD"
+    )
+
+
 class FrontendSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -554,6 +604,7 @@ class Settings(BaseSettings):
     observability: ObservabilitySettings = Field(
         default_factory=_settings_factory(ObservabilitySettings)
     )
+    evaluation: EvaluationSettings = Field(default_factory=_settings_factory(EvaluationSettings))
     frontend: FrontendSettings = Field(default_factory=_settings_factory(FrontendSettings))
 
     @model_validator(mode="after")
@@ -606,6 +657,7 @@ __all__ = [
     "DeepseekSettings",
     "DevAuthSettings",
     "EmbeddingSettings",
+    "EvaluationSettings",
     "FrontendSettings",
     "LlmSettings",
     "MinioSettings",

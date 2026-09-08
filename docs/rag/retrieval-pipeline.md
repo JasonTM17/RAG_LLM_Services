@@ -108,8 +108,38 @@ Primary files:
   - Authentication: `X-User-Id` header (in development/test) or bearer token.
   - Response: `RetrievalSearchResponse` containing ranked chunks, `ContextBundle`, total latency, and per-stage latency.
 
+## Evaluation Framework
+
+Phase 12 adds a fixture-safe evaluation path that can run without paid provider
+calls:
+
+- Baseline dataset: `evals/datasets/baseline-learning-rag.jsonl`.
+- Dataset fields: `question`, `expected_answer`, `expected_sources`,
+  `metadata`, plus optional fixture `retrieved_sources` and deterministic
+  `answer`.
+- Metrics: retrieval hit rate, Recall@K, MRR, nDCG@K, context relevance,
+  answer relevance, citation correctness, citation recall, citation precision,
+  missing citation count, and faithfulness.
+- Thresholds: configured through `EVAL_*_THRESHOLD` variables plus
+  `EVAL_TOP_K`; threshold misses are explicit `FAIL` results.
+- CLI: `uv run python scripts/run-eval.py` or `make eval` where `make` is
+  available.
+- API: `POST /api/v1/evaluations` creates an idempotent `PENDING` run and
+  enqueues a worker task; the worker marks `RUNNING`, executes the
+  deterministic evaluation, stores aggregate results in
+  `evaluation_runs.metadata_json.result`, and writes a safe report under
+  `EVAL_REPORTS_DIR`. `GET /api/v1/evaluations/{run_id}` returns the current
+  status and aggregate result when available.
+
+Generated reports summarize metrics, thresholds, expected source IDs, retrieved
+source IDs, and fixture metadata only; they do not include raw questions,
+expected answers, model answers, or retrieved document text.
+
 ## Verification
 
 - `.\scripts\verify-phase-05.ps1` passes with `PHASE_05_VERIFY_PASS`.
 - The Phase 05 gate covers import smoke, Alembic history, ruff check/format, mypy, the full pytest suite, secret scan, `git diff --check`, retrieval filtering, tenant isolation, reranker disabling, audit rows, and low-cardinality metric labels.
 - Live PostgreSQL `EXPLAIN` for pgvector/GIN query plans is deferred until a live Postgres environment is available.
+- `.\scripts\verify-phase-12.ps1` covers the evaluation runner, config parity,
+  unit metric tests, API integration tests, generated report secret scan, full
+  lint/typecheck/test gates, and `git diff --check`.

@@ -46,6 +46,7 @@ rag-llm-services-worker = { workspace = true }
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.ruff]
@@ -60,6 +61,7 @@ src = [
     "packages/llm/src",
     "packages/agents/src",
     "apps/worker/src",
+    "evals",
     "tests",
 ]
 

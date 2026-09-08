@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_llm_services_api.db.models.automation import AutomationReportModel, EvaluationRunModel
@@ -34,6 +35,17 @@ class EvaluationRunCreate:
     idempotency_key: str | None = None
     workflow_name: str | None = None
     dataset_name: str | None = None
+    metadata_json: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class EvaluationRunUpdate:
+    """Mutable evaluation fields written after a run attempt."""
+
+    status: str
+    dataset_name: str | None = None
+    report_path: str | None = None
+    error_message: str | None = None
     metadata_json: dict[str, Any] = field(default_factory=dict)
 
 
@@ -87,14 +99,17 @@ class AutomationRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def create_evaluation_run(self, data: EvaluationRunCreate) -> EvaluationRunModel:
-        """Persist a queued evaluation trigger row for later worker execution."""
+    async def create_evaluation_run(
+        self,
+        data: EvaluationRunCreate,
+    ) -> tuple[EvaluationRunModel, bool]:
+        """Persist an evaluation trigger row or return an idempotent existing row."""
         existing = await self.get_evaluation_run_by_idempotency_key(
             owner_id=data.owner_id,
             idempotency_key=data.idempotency_key,
         )
         if existing is not None:
-            return existing
+            return existing, False
 
         run = EvaluationRunModel(
             owner_id=data.owner_id,
@@ -108,7 +123,43 @@ class AutomationRepository:
         self._session.add(run)
         await self._session.flush()
         await self._session.refresh(run)
+        return run, True
+
+    async def update_evaluation_run(
+        self,
+        run: EvaluationRunModel,
+        data: EvaluationRunUpdate,
+    ) -> EvaluationRunModel:
+        """Persist evaluation execution status and safe result metadata."""
+        run.status = data.status
+        if data.dataset_name is not None:
+            run.dataset_name = data.dataset_name
+        run.report_path = data.report_path
+        run.error_message = data.error_message
+        run.metadata_json = dict(data.metadata_json)
+        await self._session.flush()
+        await self._session.refresh(run)
         return run
+
+    async def claim_evaluation_run(
+        self,
+        *,
+        owner_id: UUID,
+        run_id: UUID,
+    ) -> tuple[EvaluationRunModel | None, bool]:
+        """Atomically move a pending evaluation run to RUNNING when possible."""
+        stmt = (
+            update(EvaluationRunModel)
+            .where(
+                EvaluationRunModel.owner_id == owner_id,
+                EvaluationRunModel.id == run_id,
+                EvaluationRunModel.status == EvaluationRunStatus.PENDING.value,
+            )
+            .values(status=EvaluationRunStatus.RUNNING.value, error_message=None)
+        )
+        result = cast(CursorResult[Any], await self._session.execute(stmt))
+        run = await self.get_evaluation_run(owner_id=owner_id, run_id=run_id)
+        return run, bool(result.rowcount)
 
     async def get_evaluation_run(
         self,

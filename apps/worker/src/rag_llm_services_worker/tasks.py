@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from rag_llm_services_api.application.evaluation_service import EvaluationApplicationService
 from rag_llm_services_api.application.ingestion_pipeline import (
     IngestionPipeline,
     safe_ingestion_error,
@@ -20,9 +21,12 @@ from rag_llm_services_api.db.session import get_engine
 from rag_llm_services_api.domain.documents import DocumentStatus, IngestionJobStatus
 from rag_llm_services_api.infrastructure.embeddings import get_embedding_provider
 from rag_llm_services_api.infrastructure.queue.base import (
+    EVALUATION_TASK_NAME,
     INGESTION_TASK_NAME,
+    EvaluationTaskPayload,
     IngestionTaskPayload,
 )
+from rag_llm_services_api.infrastructure.repositories.automation import AutomationRepository
 from rag_llm_services_api.infrastructure.repositories.chunks import ChunkRepository
 from rag_llm_services_api.infrastructure.repositories.documents import DocumentRepository
 from rag_llm_services_api.infrastructure.storage.base import ObjectStoragePort
@@ -70,6 +74,29 @@ class WorkerIngestionResult:
             "status": self.status,
             "chunk_count": self.chunk_count,
             "attempt_count": self.attempt_count,
+            "error_message": self.error_message,
+        }
+
+
+@dataclass(frozen=True)
+class WorkerEvaluationResult:
+    """JSON-serializable worker evaluation task result."""
+
+    owner_id: str
+    run_id: str
+    status: str
+    executed: bool
+    report_path: str | None = None
+    error_message: str | None = None
+
+    def to_dict(self) -> dict[str, str | bool | None]:
+        """Return a JSON-compatible mapping for Celery result storage."""
+        return {
+            "owner_id": self.owner_id,
+            "run_id": self.run_id,
+            "status": self.status,
+            "executed": self.executed,
+            "report_path": self.report_path,
             "error_message": self.error_message,
         }
 
@@ -271,6 +298,93 @@ async def run_ingestion_task_once(
     return task_result
 
 
+async def run_evaluation_task_once(
+    payload: EvaluationTaskPayload,
+    *,
+    settings: Settings | None = None,
+    session_maker: async_sessionmaker[AsyncSession] | None = None,
+) -> WorkerEvaluationResult:
+    """Run one evaluation task with durable status transitions."""
+    cfg = settings or get_settings()
+    maker = session_maker or _build_session_maker(cfg)
+    task_result: WorkerEvaluationResult | None = None
+
+    async with maker() as session:
+        repo = AutomationRepository(session)
+        service = EvaluationApplicationService(repo, cfg)
+        try:
+            claim = await service.mark_running(owner_id=payload.owner_id, run_id=payload.run_id)
+            await session.commit()
+            if claim.executed:
+                completion = await service.complete_running(
+                    owner_id=payload.owner_id,
+                    run_id=payload.run_id,
+                )
+                await session.commit()
+                run = completion.run
+                executed = completion.executed
+            else:
+                run = claim.run
+                executed = False
+            task_result = WorkerEvaluationResult(
+                owner_id=str(payload.owner_id),
+                run_id=str(payload.run_id),
+                status=run.status,
+                executed=executed,
+                report_path=run.report_path,
+                error_message=run.error_message,
+            )
+        except Exception:  # noqa: BLE001 - worker must persist a safe terminal state
+            await session.rollback()
+            try:
+                failed = await service.mark_execution_failure(
+                    owner_id=payload.owner_id,
+                    run_id=payload.run_id,
+                )
+                await session.commit()
+                task_result = WorkerEvaluationResult(
+                    owner_id=str(payload.owner_id),
+                    run_id=str(payload.run_id),
+                    status=failed.status,
+                    executed=True,
+                    report_path=failed.report_path,
+                    error_message=failed.error_message,
+                )
+            except Exception:
+                await session.rollback()
+                record_error("worker", "exception")
+                logger.exception(
+                    "Failed to persist evaluation worker failure state",
+                    extra={
+                        "stage": "worker.evaluation.persist_failure",
+                        "dependency": "database",
+                        "status": "failed",
+                        "error_code": "WORKER_EVALUATION_FAILURE_STATE_FAILED",
+                    },
+                )
+                task_result = WorkerEvaluationResult(
+                    owner_id=str(payload.owner_id),
+                    run_id=str(payload.run_id),
+                    status="FAILED",
+                    executed=True,
+                    error_message="Evaluation execution failed",
+                )
+
+    assert task_result is not None
+    if task_result.status == "FAILED":
+        record_error("worker", "exception")
+    logger.info(
+        "Evaluation worker run completed",
+        extra={
+            "stage": "worker.evaluation",
+            "dependency": "celery",
+            "status": task_result.status.lower(),
+            "error_code": "WORKER_EVALUATION_FAILED" if task_result.status == "FAILED" else None,
+        },
+    )
+    return task_result
+
+
 @celery_app.task(
     bind=True,
     name=INGESTION_TASK_NAME,
@@ -293,3 +407,11 @@ def ingest_document(self: object, **kwargs: str) -> Mapping[str, Any]:
             raise_on_failed_result=not final_attempt,
         )
     ).to_dict()
+
+
+@celery_app.task(bind=True, name=EVALUATION_TASK_NAME)
+def run_evaluation(self: object, **kwargs: str) -> Mapping[str, Any]:
+    """Celery task wrapper for deterministic RAG evaluation payloads."""
+    del self
+    payload = EvaluationTaskPayload.from_task_kwargs(kwargs)
+    return asyncio.run(run_evaluation_task_once(payload)).to_dict()

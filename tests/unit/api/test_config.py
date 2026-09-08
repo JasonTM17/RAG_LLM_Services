@@ -94,6 +94,18 @@ def test_local_defaults_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.observability.cadvisor_port == 8080
     assert settings.observability.grafana_image == "grafana/grafana:13.2.1"
     assert settings.observability.grafana_port == 3000
+    assert settings.evaluation.dataset_path == "evals/datasets/baseline-learning-rag.jsonl"
+    assert settings.evaluation.reports_dir == "evals/reports/local"
+    assert settings.evaluation.top_k == 5
+    assert settings.evaluation.retrieval_hit_rate_threshold == 1.0
+    assert settings.evaluation.recall_at_k_threshold == 0.8
+    assert settings.evaluation.mrr_threshold == 0.8
+    assert settings.evaluation.ndcg_at_k_threshold == 0.8
+    assert settings.evaluation.context_relevance_threshold == 0.5
+    assert settings.evaluation.answer_relevance_threshold == 0.65
+    assert settings.evaluation.citation_correctness_threshold == 1.0
+    assert settings.evaluation.citation_recall_threshold == 0.8
+    assert settings.evaluation.faithfulness_threshold == 0.6
 
 
 def test_retrieval_defaults_are_configurable(monkeypatch: pytest.MonkeyPatch) -> None:

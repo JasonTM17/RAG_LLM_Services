@@ -7,7 +7,9 @@ from celery import Celery
 
 from rag_llm_services_api.core.config import Settings
 from rag_llm_services_api.infrastructure.queue.base import (
+    EVALUATION_TASK_NAME,
     INGESTION_TASK_NAME,
+    EvaluationTaskPayload,
     IngestionTaskPayload,
     QueueEnqueueResult,
 )
@@ -34,7 +36,10 @@ def build_celery_app(settings: Settings) -> Celery:
         worker_concurrency=settings.queue.worker_concurrency,
         broker_transport_options={"visibility_timeout": visibility_timeout},
         result_backend_transport_options={"visibility_timeout": visibility_timeout},
-        task_routes={INGESTION_TASK_NAME: {"queue": settings.queue.ingestion_queue_name}},
+        task_routes={
+            INGESTION_TASK_NAME: {"queue": settings.queue.ingestion_queue_name},
+            EVALUATION_TASK_NAME: {"queue": settings.queue.ingestion_queue_name},
+        },
     )
     return app
 
@@ -49,6 +54,15 @@ class RedisTaskQueue:
     async def enqueue_ingestion_job(self, payload: IngestionTaskPayload) -> QueueEnqueueResult:
         result = self._celery.send_task(
             INGESTION_TASK_NAME,
+            kwargs=payload.to_task_kwargs(),
+            task_id=payload.task_id,
+            queue=self._settings.queue.ingestion_queue_name,
+        )
+        return QueueEnqueueResult(task_id=str(result.id), queued=True)
+
+    async def enqueue_evaluation_run(self, payload: EvaluationTaskPayload) -> QueueEnqueueResult:
+        result = self._celery.send_task(
+            EVALUATION_TASK_NAME,
             kwargs=payload.to_task_kwargs(),
             task_id=payload.task_id,
             queue=self._settings.queue.ingestion_queue_name,
