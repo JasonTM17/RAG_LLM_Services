@@ -6,6 +6,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
@@ -219,6 +220,79 @@ async def test_duplicate_worker_tasks_execute_only_once(evaluation_env: Evaluati
     assert first.executed is True
     assert second.status == "SUCCEEDED"
     assert second.executed is False
+
+
+async def test_running_evaluation_retry_does_not_requeue_before_lease_expires(
+    evaluation_env: EvaluationTestEnv,
+) -> None:
+    payload = {
+        "idempotency_key": "phase-12-active-running",
+        "dataset_name": "baseline-learning-rag",
+    }
+    response = await evaluation_env.client.post("/api/v1/evaluations", json=payload)
+    assert response.status_code == 202
+    run_id = UUID(response.json()["id"])
+
+    async with evaluation_env.session_maker() as session:
+        service = EvaluationApplicationService(
+            AutomationRepository(session),
+            evaluation_env.build_settings(),
+        )
+        claim = await service.mark_running(owner_id=evaluation_env.owner_id, run_id=run_id)
+        await session.commit()
+        assert claim.executed is True
+
+    retry = await evaluation_env.client.post("/api/v1/evaluations", json=payload)
+    assert retry.status_code == 202
+    assert retry.json()["id"] == str(run_id)
+    assert retry.json()["status"] == "RUNNING"
+    assert len(evaluation_env.queue.evaluation_enqueued) == 1
+
+    worker_result = await run_evaluation_task_once(
+        evaluation_env.queue.evaluation_enqueued[0],
+        settings=evaluation_env.build_settings(),
+        session_maker=evaluation_env.session_maker,
+    )
+
+    assert worker_result.status == "RUNNING"
+    assert worker_result.executed is False
+
+
+async def test_stale_running_evaluation_retry_requeues_and_worker_reclaims(
+    evaluation_env: EvaluationTestEnv,
+) -> None:
+    payload = {
+        "idempotency_key": "phase-12-stale-running",
+        "dataset_name": "baseline-learning-rag",
+    }
+    response = await evaluation_env.client.post("/api/v1/evaluations", json=payload)
+    assert response.status_code == 202
+    run_id = UUID(response.json()["id"])
+
+    async with evaluation_env.session_maker() as session:
+        service = EvaluationApplicationService(
+            AutomationRepository(session),
+            evaluation_env.build_settings(),
+        )
+        claim = await service.mark_running(owner_id=evaluation_env.owner_id, run_id=run_id)
+        assert claim.executed is True
+        claim.run.updated_at = datetime.now(UTC) - timedelta(hours=2)
+        await session.commit()
+
+    retry = await evaluation_env.client.post("/api/v1/evaluations", json=payload)
+    assert retry.status_code == 202
+    assert retry.json()["id"] == str(run_id)
+    assert retry.json()["status"] == "RUNNING"
+    assert len(evaluation_env.queue.evaluation_enqueued) == 2
+
+    worker_result = await run_evaluation_task_once(
+        evaluation_env.queue.evaluation_enqueued[-1],
+        settings=evaluation_env.build_settings(),
+        session_maker=evaluation_env.session_maker,
+    )
+
+    assert worker_result.status == "SUCCEEDED"
+    assert worker_result.executed is True
 
 
 async def test_evaluation_api_records_failed_threshold_run(

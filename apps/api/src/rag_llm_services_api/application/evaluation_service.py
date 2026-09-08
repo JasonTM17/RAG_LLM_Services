@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -33,6 +34,7 @@ class EvaluationCreateOutcome:
 
     run: EvaluationRunModel
     created: bool
+    should_enqueue: bool
 
 
 @dataclass(frozen=True)
@@ -75,7 +77,11 @@ class EvaluationApplicationService:
                 metadata_json=dict(metadata),
             )
         )
-        return EvaluationCreateOutcome(run=run, created=created)
+        return EvaluationCreateOutcome(
+            run=run,
+            created=created,
+            should_enqueue=created or self.should_enqueue(run),
+        )
 
     async def mark_running(
         self,
@@ -87,10 +93,15 @@ class EvaluationApplicationService:
         run, claimed = await self._repository.claim_evaluation_run(
             owner_id=owner_id,
             run_id=run_id,
+            stale_before=self._stale_before(),
         )
         if run is None:
             raise NotFoundError("Evaluation run not found")
         return EvaluationRunOutcome(run=run, executed=claimed)
+
+    def should_enqueue(self, run: EvaluationRunModel) -> bool:
+        """Return whether an API retry should publish a worker task."""
+        return run.status == EvaluationRunStatus.PENDING.value or self._running_run_is_stale(run)
 
     async def complete_running(
         self,
@@ -202,6 +213,16 @@ class EvaluationApplicationService:
             faithfulness=cfg.faithfulness_threshold,
         )
 
+    def _stale_before(self) -> datetime:
+        return datetime.now(UTC) - timedelta(
+            seconds=self._settings.evaluation.run_stale_after_seconds
+        )
+
+    def _running_run_is_stale(self, run: EvaluationRunModel) -> bool:
+        if run.status != EvaluationRunStatus.RUNNING.value:
+            return False
+        return _as_utc(run.updated_at) < self._stale_before()
+
     async def _mark_failed(
         self,
         run: EvaluationRunModel,
@@ -243,3 +264,9 @@ def _resolve_repo_path(value: str) -> Path:
 def _metadata_result(metadata_json: dict[str, Any]) -> dict[str, Any] | None:
     result = metadata_json.get("result")
     return result if isinstance(result, dict) else None
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)

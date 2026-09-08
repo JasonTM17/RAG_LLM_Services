@@ -156,6 +156,7 @@ KNOWN_ENV_VARS = frozenset(
         "EVAL_CITATION_CORRECTNESS_THRESHOLD",
         "EVAL_CITATION_RECALL_THRESHOLD",
         "EVAL_FAITHFULNESS_THRESHOLD",
+        "EVAL_RUN_STALE_AFTER_SECONDS",
         "WEB_PORT",
         "RAG_BACKEND_ORIGIN",
     }
@@ -601,6 +602,9 @@ class EvaluationSettings(BaseSettings):
     )
     faithfulness_threshold: float = Field(
         0.6, ge=0.0, le=1.0, validation_alias="EVAL_FAITHFULNESS_THRESHOLD"
+    )
+    run_stale_after_seconds: int = Field(
+        3600, ge=60, le=86400, validation_alias="EVAL_RUN_STALE_AFTER_SECONDS"
     )
 
 

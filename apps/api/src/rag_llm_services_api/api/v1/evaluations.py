@@ -20,7 +20,6 @@ from rag_llm_services_api.core.config import Settings, get_settings
 from rag_llm_services_api.core.errors import NotFoundError
 from rag_llm_services_api.db.models.automation import EvaluationRunModel
 from rag_llm_services_api.db.session import get_session
-from rag_llm_services_api.domain.automation import EvaluationRunStatus
 from rag_llm_services_api.infrastructure.queue import get_task_queue
 from rag_llm_services_api.infrastructure.queue.base import EvaluationTaskPayload, TaskQueue
 from rag_llm_services_api.infrastructure.repositories.automation import AutomationRepository
@@ -56,7 +55,7 @@ async def create_evaluation_run(
             metadata=payload.metadata,
         )
         run = outcome.run
-        should_enqueue = outcome.created or run.status == EvaluationRunStatus.PENDING.value
+        should_enqueue = outcome.should_enqueue
         await session.commit()
     except IntegrityError:
         await session.rollback()
@@ -68,7 +67,7 @@ async def create_evaluation_run(
         if existing_run is None:
             raise
         run = existing_run
-        should_enqueue = run.status == EvaluationRunStatus.PENDING.value
+        should_enqueue = service.should_enqueue(run)
     except Exception:
         await session.rollback()
         raise

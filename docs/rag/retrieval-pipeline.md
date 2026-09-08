@@ -128,7 +128,10 @@ The fixture-safe evaluation path can run without paid provider calls:
   deterministic evaluation, stores aggregate results in
   `evaluation_runs.metadata_json.result`, and writes a safe report under
   `EVAL_REPORTS_DIR`. `GET /api/v1/evaluations/{run_id}` returns the current
-  status and aggregate result when available.
+  status and aggregate result when available. Idempotent retries requeue stale
+  `RUNNING` runs after `EVAL_RUN_STALE_AFTER_SECONDS`; duplicate active workers
+  before that lease expires observe the existing `RUNNING` state and do not
+  execute the run twice.
 
 Generated reports summarize metrics, thresholds, expected source IDs, retrieved
 source IDs, and fixture metadata only; they do not include raw questions,

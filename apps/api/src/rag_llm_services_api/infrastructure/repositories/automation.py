@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -146,16 +147,30 @@ class AutomationRepository:
         *,
         owner_id: UUID,
         run_id: UUID,
+        stale_before: datetime | None = None,
     ) -> tuple[EvaluationRunModel | None, bool]:
-        """Atomically move a pending evaluation run to RUNNING when possible."""
+        """Atomically move a pending or stale running evaluation run to RUNNING."""
+        claimable_status = EvaluationRunModel.status == EvaluationRunStatus.PENDING.value
+        if stale_before is not None:
+            claimable_status = or_(
+                claimable_status,
+                and_(
+                    EvaluationRunModel.status == EvaluationRunStatus.RUNNING.value,
+                    EvaluationRunModel.updated_at < stale_before,
+                ),
+            )
         stmt = (
             update(EvaluationRunModel)
             .where(
                 EvaluationRunModel.owner_id == owner_id,
                 EvaluationRunModel.id == run_id,
-                EvaluationRunModel.status == EvaluationRunStatus.PENDING.value,
+                claimable_status,
             )
-            .values(status=EvaluationRunStatus.RUNNING.value, error_message=None)
+            .values(
+                status=EvaluationRunStatus.RUNNING.value,
+                error_message=None,
+                updated_at=func.now(),
+            )
         )
         result = cast(CursorResult[Any], await self._session.execute(stmt))
         run = await self.get_evaluation_run(owner_id=owner_id, run_id=run_id)

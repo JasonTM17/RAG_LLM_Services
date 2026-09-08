@@ -21,6 +21,9 @@ Default in-process settings use a memory queue for tests and offline local impor
 - Celery supplies mature retry/backoff controls, JSON serialization, queue routing, Redis visibility timeout support, and familiar Docker Compose operations.
 - Queue depth and job lifecycle metrics become release evidence.
 - The API remains decoupled from Celery primitives through the queue port.
+- Queued evaluation runs use an application-level stale `RUNNING` lease so an
+  idempotent retry can recover a worker crash without double-executing an active
+  run.
 
 ## Alternatives Considered
 
@@ -31,7 +34,7 @@ Default in-process settings use a memory queue for tests and offline local impor
 
 ## Larger-Scale Path
 
-Split ingestion, evaluation, and maintenance onto separate queues when throughput or isolation requires it. Add dead-letter handling, stale-run recovery, worker autoscaling, and deployment-specific tracing before claiming production reliability for long-running background work.
+Split ingestion, evaluation, and maintenance onto separate queues when throughput or isolation requires it. Add dead-letter handling, ingestion-specific stale-job recovery, worker autoscaling, and deployment-specific tracing before claiming production reliability for long-running background work.
 
 ## References
 
