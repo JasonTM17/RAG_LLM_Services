@@ -92,6 +92,18 @@ jobs:
           SHOULD_PUSH="${{ github.event_name == 'push' || inputs.push }}"
           echo "should_push=${SHOULD_PUSH}" >> "$GITHUB_OUTPUT"
 
+          ENABLE_DOCKERHUB="false"
+          if [ "${{ steps.dockerhub-check.outputs.available }}" = "true" ] && [ "${{ github.event_name }}" = "push" -o "${{ inputs.registry }}" = "dockerhub" -o "${{ inputs.registry }}" = "both" ]; then
+            ENABLE_DOCKERHUB="true"
+          fi
+          echo "enable_dockerhub=${ENABLE_DOCKERHUB}" >> "$GITHUB_OUTPUT"
+
+          ENABLE_GHCR="false"
+          if [ "${{ github.event_name }}" = "push" -o "${{ inputs.registry }}" = "ghcr" -o "${{ inputs.registry }}" = "both" ]; then
+            ENABLE_GHCR="true"
+          fi
+          echo "enable_ghcr=${ENABLE_GHCR}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push API image
         uses: docker/build-push-action@v6
         with:
@@ -99,11 +111,11 @@ jobs:
           file: apps/api/Dockerfile
           push: ${{ steps.meta-calc.outputs.should_push == 'true' }}
           tags: |
-            ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-api:{1}', steps.meta-calc.outputs.dockerhub_user, steps.meta-calc.outputs.tag) || '' }}
-            ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-api:latest', steps.meta-calc.outputs.dockerhub_user) || '' }}
-            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-api:${{ steps.meta-calc.outputs.tag }}
-            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-api:latest
-            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-api:sha-${{ github.sha }}
+            ${{ steps.meta-calc.outputs.enable_dockerhub == 'true' && format('{0}/rag-llm-services-api:{1}', steps.meta-calc.outputs.dockerhub_user, steps.meta-calc.outputs.tag) || '' }}
+            ${{ steps.meta-calc.outputs.enable_dockerhub == 'true' && format('{0}/rag-llm-services-api:latest', steps.meta-calc.outputs.dockerhub_user) || '' }}
+            ${{ steps.meta-calc.outputs.enable_ghcr == 'true' && format('ghcr.io/{0}/rag-llm-services-api:{1}', steps.meta-calc.outputs.owner_lower, steps.meta-calc.outputs.tag) || '' }}
+            ${{ steps.meta-calc.outputs.enable_ghcr == 'true' && format('ghcr.io/{0}/rag-llm-services-api:latest', steps.meta-calc.outputs.owner_lower) || '' }}
+            ${{ steps.meta-calc.outputs.enable_ghcr == 'true' && format('ghcr.io/{0}/rag-llm-services-api:sha-{1}', steps.meta-calc.outputs.owner_lower, github.sha) || '' }}
 
       - name: Build and push Worker image
         uses: docker/build-push-action@v6
@@ -112,11 +124,11 @@ jobs:
           file: apps/worker/Dockerfile
           push: ${{ steps.meta-calc.outputs.should_push == 'true' }}
           tags: |
-            ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-worker:{1}', steps.meta-calc.outputs.dockerhub_user, steps.meta-calc.outputs.tag) || '' }}
-            ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-worker:latest', steps.meta-calc.outputs.dockerhub_user) || '' }}
-            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-worker:${{ steps.meta-calc.outputs.tag }}
-            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-worker:latest
-            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-worker:sha-${{ github.sha }}
+            ${{ steps.meta-calc.outputs.enable_dockerhub == 'true' && format('{0}/rag-llm-services-worker:{1}', steps.meta-calc.outputs.dockerhub_user, steps.meta-calc.outputs.tag) || '' }}
+            ${{ steps.meta-calc.outputs.enable_dockerhub == 'true' && format('{0}/rag-llm-services-worker:latest', steps.meta-calc.outputs.dockerhub_user) || '' }}
+            ${{ steps.meta-calc.outputs.enable_ghcr == 'true' && format('ghcr.io/{0}/rag-llm-services-worker:{1}', steps.meta-calc.outputs.owner_lower, steps.meta-calc.outputs.tag) || '' }}
+            ${{ steps.meta-calc.outputs.enable_ghcr == 'true' && format('ghcr.io/{0}/rag-llm-services-worker:latest', steps.meta-calc.outputs.owner_lower) || '' }}
+            ${{ steps.meta-calc.outputs.enable_ghcr == 'true' && format('ghcr.io/{0}/rag-llm-services-worker:sha-{1}', steps.meta-calc.outputs.owner_lower, github.sha) || '' }}
 
       - name: Build and push Web image
         uses: docker/build-push-action@v6
@@ -125,8 +137,8 @@ jobs:
           file: apps/web/Dockerfile
           push: ${{ steps.meta-calc.outputs.should_push == 'true' }}
           tags: |
-            ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-web:{1}', steps.meta-calc.outputs.dockerhub_user, steps.meta-calc.outputs.tag) || '' }}
-            ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-web:latest', steps.meta-calc.outputs.dockerhub_user) || '' }}
-            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-web:${{ steps.meta-calc.outputs.tag }}
-            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-web:latest
-            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-web:sha-${{ github.sha }}
+            ${{ steps.meta-calc.outputs.enable_dockerhub == 'true' && format('{0}/rag-llm-services-web:{1}', steps.meta-calc.outputs.dockerhub_user, steps.meta-calc.outputs.tag) || '' }}
+            ${{ steps.meta-calc.outputs.enable_dockerhub == 'true' && format('{0}/rag-llm-services-web:latest', steps.meta-calc.outputs.dockerhub_user) || '' }}
+            ${{ steps.meta-calc.outputs.enable_ghcr == 'true' && format('ghcr.io/{0}/rag-llm-services-web:{1}', steps.meta-calc.outputs.owner_lower, steps.meta-calc.outputs.tag) || '' }}
+            ${{ steps.meta-calc.outputs.enable_ghcr == 'true' && format('ghcr.io/{0}/rag-llm-services-web:latest', steps.meta-calc.outputs.owner_lower) || '' }}
+            ${{ steps.meta-calc.outputs.enable_ghcr == 'true' && format('ghcr.io/{0}/rag-llm-services-web:sha-{1}', steps.meta-calc.outputs.owner_lower, github.sha) || '' }}

@@ -28,7 +28,7 @@ evals/       Evaluation fixtures, reports, and local private outputs.
 tests/       Unit, integration, and end-to-end tests.
 docs/        Architecture, deployment, security, and ADR docs.
 scripts/     Developer and release utility scripts.
-plans/       AgentKit implementation plans and evidence.
+plans/       AgentKit implementation plans and evidence (local workspace; gitignored).
 ```
 
 ## Rules
