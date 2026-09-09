@@ -36,6 +36,7 @@ PRODUCTION_REQUIRED_SECRET_VARS = (
     "N8N_API_KEY",
     "N8N_ENCRYPTION_KEY",
     "GRAFANA_ADMIN_PASSWORD",
+    "RAG_AUTH_JWT_SECRET",
 )
 
 # Keep in parity with .env.example (enforced in both directions by tests).
@@ -48,6 +49,10 @@ KNOWN_ENV_VARS = frozenset(
         "CORS_ORIGINS",
         "RAG_DEV_AUTH_ENABLED",
         "RAG_DEV_USER_ID",
+        "RAG_AUTH_JWT_SECRET",
+        "RAG_AUTH_ACCESS_TOKEN_TTL_MINUTES",
+        "RAG_AUTH_LOGIN_RATE_LIMIT_PER_MINUTE",
+        "RAG_AUTH_REGISTER_RATE_LIMIT_PER_MINUTE",
         "POSTGRES_DB",
         "POSTGRES_USER",
         "POSTGRES_PASSWORD",
@@ -232,6 +237,23 @@ class DevAuthSettings(BaseSettings):
 
     auth_enabled: bool = Field(False, validation_alias="RAG_DEV_AUTH_ENABLED")
     user_id: UUID | None = Field(None, validation_alias="RAG_DEV_USER_ID")
+
+
+class AuthSettings(BaseSettings):
+    """Account authentication: JWT material and auth-route rate limits."""
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    jwt_secret: str = Field("replace-with-local-jwt-secret", validation_alias="RAG_AUTH_JWT_SECRET")
+    access_token_ttl_minutes: int = Field(
+        60, ge=1, le=1440, validation_alias="RAG_AUTH_ACCESS_TOKEN_TTL_MINUTES"
+    )
+    login_rate_limit_per_minute: int = Field(
+        10, ge=1, le=1000, validation_alias="RAG_AUTH_LOGIN_RATE_LIMIT_PER_MINUTE"
+    )
+    register_rate_limit_per_minute: int = Field(
+        3, ge=1, le=1000, validation_alias="RAG_AUTH_REGISTER_RATE_LIMIT_PER_MINUTE"
+    )
 
 
 class PostgresSettings(BaseSettings):
@@ -632,6 +654,7 @@ class Settings(BaseSettings):
 
     app: AppSettings = Field(default_factory=_settings_factory(AppSettings))
     dev_auth: DevAuthSettings = Field(default_factory=_settings_factory(DevAuthSettings))
+    auth: AuthSettings = Field(default_factory=_settings_factory(AuthSettings))
     postgres: PostgresSettings = Field(default_factory=_settings_factory(PostgresSettings))
     database: DatabaseSettings = Field(default_factory=_settings_factory(DatabaseSettings))
     redis: RedisSettings = Field(default_factory=_settings_factory(RedisSettings))
@@ -664,6 +687,7 @@ class Settings(BaseSettings):
             "N8N_API_KEY": self.n8n.api_key,
             "N8N_ENCRYPTION_KEY": self.n8n.encryption_key,
             "GRAFANA_ADMIN_PASSWORD": self.observability.grafana_admin_password,
+            "RAG_AUTH_JWT_SECRET": self.auth.jwt_secret,
         }
         # Invariant: the guard must cover exactly the documented required set.
         assert set(values) == set(PRODUCTION_REQUIRED_SECRET_VARS), (
@@ -675,6 +699,8 @@ class Settings(BaseSettings):
         problems: list[str] = []
         if offending:
             problems.append("missing or placeholder values for: " + ", ".join(sorted(offending)))
+        if len(self.auth.jwt_secret) < 32:
+            problems.append("RAG_AUTH_JWT_SECRET must be at least 32 characters in production")
         if self.dev_auth.auth_enabled:
             problems.append("dev auth must be disabled in production (fail closed)")
         if self.llm.provider != "deepseek":
@@ -704,6 +730,7 @@ __all__ = [
     "KNOWN_ENV_VARS",
     "PLACEHOLDER_MARKERS",
     "AppSettings",
+    "AuthSettings",
     "DatabaseSettings",
     "DeepseekSettings",
     "DevAuthSettings",

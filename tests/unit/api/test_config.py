@@ -193,6 +193,7 @@ def test_production_with_complete_config_constructs(
     monkeypatch.setenv("N8N_API_KEY", real)
     monkeypatch.setenv("N8N_ENCRYPTION_KEY", real)
     monkeypatch.setenv("GRAFANA_ADMIN_PASSWORD", real)
+    monkeypatch.setenv("RAG_AUTH_JWT_SECRET", "0" * 32)
     settings = Settings(_env_file=None)
     assert settings.app.env == "production"
     assert settings.dev_auth.auth_enabled is False
@@ -255,6 +256,7 @@ def test_production_guard_covers_every_required_var(
         "N8N_API_KEY": real,
         "N8N_ENCRYPTION_KEY": real,
         "GRAFANA_ADMIN_PASSWORD": real,
+        "RAG_AUTH_JWT_SECRET": "0" * 32,
     }
     assert set(complete) == set(PRODUCTION_REQUIRED_SECRET_VARS)
     for missing in PRODUCTION_REQUIRED_SECRET_VARS:

@@ -27,6 +27,8 @@ dependencies = [
     "rag-llm-services-embeddings",
     "rag-llm-services-llm",
     "rag-llm-services-agents",
+    "pyjwt[crypto]>=2.13,<3",
+    "argon2-cffi>=23.1",
 ]
 
 [tool.uv.sources]

@@ -22,6 +22,7 @@ def _set_complete_production_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("N8N_API_KEY", real)
     monkeypatch.setenv("N8N_ENCRYPTION_KEY", real)
     monkeypatch.setenv("GRAFANA_ADMIN_PASSWORD", real)
+    monkeypatch.setenv("RAG_AUTH_JWT_SECRET", "0" * 32)
 
 
 def test_production_rejects_local_http_cors_origin(monkeypatch: pytest.MonkeyPatch) -> None:

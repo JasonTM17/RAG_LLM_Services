@@ -9,6 +9,7 @@ from rag_llm_services_api.db.models.ingestion_job import IngestionJobModel
 from rag_llm_services_api.db.models.knowledge_base import KnowledgeBaseModel
 from rag_llm_services_api.db.models.llm_usage import LLMUsageModel
 from rag_llm_services_api.db.models.rag_query import RagQueryModel
+from rag_llm_services_api.db.models.user import UserModel
 
 __all__ = [
     "AutomationReportModel",
@@ -23,4 +24,5 @@ __all__ = [
     "LLMUsageModel",
     "MessageModel",
     "RagQueryModel",
+    "UserModel",
 ]

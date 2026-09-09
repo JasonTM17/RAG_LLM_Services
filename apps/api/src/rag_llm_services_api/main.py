@@ -43,6 +43,7 @@ def _collect_known_secrets(settings: Settings) -> tuple[str, ...]:
         settings.n8n.api_key,
         settings.n8n.encryption_key,
         settings.observability.grafana_admin_password,
+        settings.auth.jwt_secret,
     )
     return tuple(
         value
@@ -93,6 +94,10 @@ def create_app() -> FastAPI:
             redis_url=settings.redis.url,
         ),
         fail_closed=settings.app.env == "production",
+        route_limits={
+            "/api/v1/auth/login": (settings.auth.login_rate_limit_per_minute, 60),
+            "/api/v1/auth/register": (settings.auth.register_rate_limit_per_minute, 60),
+        },
     )
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)

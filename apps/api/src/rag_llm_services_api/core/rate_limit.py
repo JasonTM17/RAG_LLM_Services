@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -121,6 +121,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "/docs",
             "/openapi.json",
         ),
+        route_limits: Mapping[str, tuple[int, int]] | None = None,
     ) -> None:
         super().__init__(app)
         self._enabled = enabled
@@ -130,18 +131,23 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._fail_closed = fail_closed
         self._path_prefixes = path_prefixes
         self._exempt_path_prefixes = exempt_path_prefixes
+        # Exact-path overrides for sensitive endpoints (e.g. /api/v1/auth/*):
+        # (requests_per_window, window_seconds), keyed by URL path.
+        self._route_limits = dict(route_limits or {})
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if not self._should_limit(request):
             return await call_next(request)
 
         key = self._key_for(request)
+        limit = self._requests_per_window
+        window = self._window_seconds
+        route_limit = self._route_limits.get(request.url.path)
+        if route_limit is not None:
+            limit, window = route_limit
+            key = f"{key}:{request.url.path}"
         try:
-            decision = await self._store.hit(
-                key,
-                limit=self._requests_per_window,
-                window_seconds=self._window_seconds,
-            )
+            decision = await self._store.hit(key, limit=limit, window_seconds=window)
         except (OSError, RedisError, RuntimeError, TimeoutError):
             if self._fail_closed:
                 return self._error_response(

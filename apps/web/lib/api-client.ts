@@ -64,9 +64,11 @@ export class ApiClientError extends Error {
 
 export class HttpApiClient implements ApiClientPort {
   private readonly ownerId: UUID;
+  private readonly authToken?: string;
 
-  constructor(ownerId: UUID = DEFAULT_OWNER_ID) {
+  constructor(ownerId: UUID = DEFAULT_OWNER_ID, authToken?: string) {
     this.ownerId = ownerId;
+    this.authToken = authToken;
   }
 
   listKnowledgeBases(): Promise<KnowledgeBase[]> {
@@ -241,6 +243,9 @@ export class HttpApiClient implements ApiClientPort {
     const headers: Record<string, string> = {
       "x-user-id": this.ownerId,
     };
+    if (this.authToken) {
+      headers["authorization"] = `Bearer ${this.authToken}`;
+    }
     if (json) {
       headers["content-type"] = "application/json";
     }

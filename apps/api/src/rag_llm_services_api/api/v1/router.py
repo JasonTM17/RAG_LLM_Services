@@ -9,6 +9,7 @@ retrieval Phase 05, chat Phase 06/07, study Phase 07).
 
 from fastapi import APIRouter
 
+from rag_llm_services_api.api.v1.auth import router as auth_router
 from rag_llm_services_api.api.v1.automation import router as automation_router
 from rag_llm_services_api.api.v1.chat import router as chat_router
 from rag_llm_services_api.api.v1.documents import router as documents_router
@@ -19,6 +20,7 @@ from rag_llm_services_api.api.v1.retrieval import router as retrieval_router
 from rag_llm_services_api.api.v1.study import router as study_router
 
 router = APIRouter()
+router.include_router(auth_router)
 router.include_router(chat_router)
 router.include_router(automation_router)
 router.include_router(evaluations_router)

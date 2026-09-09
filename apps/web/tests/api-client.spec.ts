@@ -59,4 +59,24 @@ describe("HttpApiClient streamChat", () => {
     expect(terminal.event).toBe("response.incomplete");
     expect(terminal.error_code).toBe("STREAM_INCOMPLETE");
   });
+
+  it("attaches Authorization header when authToken is provided", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify([]), { status: 200 })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new HttpApiClient("00000000-0000-0000-0000-000000000001", "test-jwt-token");
+    await client.listKnowledgeBases();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/knowledge-bases",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: "Bearer test-jwt-token",
+          "x-user-id": "00000000-0000-0000-0000-000000000001",
+        }),
+      }),
+    );
+  });
 });

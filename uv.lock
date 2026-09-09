@@ -1705,6 +1705,7 @@ version = "0.1.0"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "alembic" },
+    { name = "argon2-cffi" },
     { name = "celery", extra = ["redis"] },
     { name = "fastapi" },
     { name = "httpx" },
@@ -1714,6 +1715,7 @@ dependencies = [
     { name = "puremagic" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "rag-llm-services-agents" },
@@ -1730,6 +1732,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.16" },
+    { name = "argon2-cffi", specifier = ">=23.1" },
     { name = "celery", extras = ["redis"], specifier = ">=5.6" },
     { name = "fastapi", specifier = ">=0.116" },
     { name = "httpx", specifier = ">=0.28" },
@@ -1739,6 +1742,7 @@ requires-dist = [
     { name = "puremagic", specifier = ">=1.28" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.10" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.13,<3" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "python-multipart", specifier = ">=0.0.12" },
     { name = "rag-llm-services-agents", editable = "packages/agents" },
