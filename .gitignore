@@ -74,17 +74,15 @@ temp/
 .tmp-*/
 .uv-cache/
 
-# Agent/runtime local state, not project contracts
-.codex/skills/
-.claude/skills/
-.cursor/skills/
-.codex/memories/
-.codex/sessions/
-.codex/logs/
-.codex/tmp/
-.codex/cache/
-.codex/plugins/
+# Private agent kits and local runtime state
+.agentkit/
+.codex/
+.claude/
+.cursor/
+.agents/
+.grok/
+.omp/
+.opencode/
+.gemini/
 .mimosa/
 .video_agent/
-.agents/skills/
-.agents/plugins/

@@ -23,10 +23,15 @@ playwright-report
 test-results
 venv
 
-.codex/skills
-.claude/skills
-.cursor/skills
-.agents/skills
+.agentkit
+.codex
+.claude
+.cursor
+.agents
+.grok
+.omp
+.opencode
+.gemini
 
 .env
 .env.*
