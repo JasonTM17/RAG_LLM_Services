@@ -7,24 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-09
+
 ### Added
 
 - Add production account authentication: user registration (`POST /api/v1/auth/register`) with argon2id password hashing, login (`POST /api/v1/auth/login`) issuing stateless HS256 JWT access tokens, and bearer token resolution on owner-scoped endpoints.
-- Add container publishing automation workflow (`.github/workflows/publish-containers.yml`) supporting tag-triggered and manual dispatch to Docker Hub and GitHub Container Registry with multi-tagging.
+- Add container publishing automation workflow (`.github/workflows/publish-containers.yml`) supporting tag-triggered and manual dispatch to Docker Hub and GitHub Container Registry with multi-tagging and OCI lowercase compliance.
 - Harden web container image with non-root `nextjs` user and OCI metadata labels across API, worker, and web Dockerfiles.
-- Add local publishing automation script (`scripts/publish-docker-hub.ps1`) and `make dockerhub-build`/`make dockerhub-push`.
+- Add container healthchecks for API, Web, and n8n services in Docker Compose with healthy dependency chaining.
+- Add local publishing automation script (`scripts/publish-docker-hub.ps1`) with Docker Hub auth pre-flight checks and `make dockerhub-build`/`make dockerhub-push`.
 - Add n8n auto-provisioning automation (`scripts/n8n-import-workflows.ps1`, `make n8n-import`), workflow volume mount in Compose, and comprehensive operational runbook (`docs/n8n/production-runbook.md`).
 - Add real isolated restore rehearsal script (`scripts/restore-rehearsal.ps1`, `make restore-rehearsal`) and Phase 17 verifier (`scripts/verify-phase-17.ps1`).
-
-### Verified post-release
-
-- Live DeepSeek provider smoke passed on 2026-09-08 via an operator-authorized `RUN_DEEPSEEK_LIVE_TESTS=1` run (single synthetic prompt, 16-token bound); live key containment audited with zero leaks into tracked, untracked, or git-internal artifacts.
-- `v0.1.0` api, worker, and web images published to the GitHub Container Registry and mirrored to Docker Hub (manifest-identical content); both registries confirmed anonymously pullable and layer-scanned clean of secrets and repository state.
-- Maintainer decision (2026-09-08): container operation is local-first. The tag-triggered CI registry publishing step (added in `eba44ee`) was removed; the published `v0.1.0` GHCR and Docker Hub images remain as one-off release artifacts, and future remote publication is a manual operator action.
-
-### Planned
-
-- Production authentication boundary, TLS, deployment cutover, and production backup/restore execution (all currently `HOLD` or `NOT_RUN`).
+- Add JWT Bearer token support in frontend `HttpApiClient` and vitest verification.
 
 ## [0.1.0] - 2026-09-08
 
