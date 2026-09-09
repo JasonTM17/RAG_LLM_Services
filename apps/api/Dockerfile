@@ -2,6 +2,11 @@
 
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS runtime
 
+LABEL org.opencontainers.image.title="rag-llm-services-api"
+LABEL org.opencontainers.image.description="FastAPI Backend for RAG LLM Services"
+LABEL org.opencontainers.image.source="https://github.com/JasonTM17/RAG_LLM_Services"
+LABEL org.opencontainers.image.licenses="MIT"
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV UV_LINK_MODE=copy

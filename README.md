@@ -178,6 +178,7 @@ Health and metrics:
 
 Primary API surfaces:
 
+- Account authentication under `POST /api/v1/auth/register` and `POST /api/v1/auth/login`.
 - Knowledge bases and documents under `/api/v1/knowledge-bases` and `/api/v1/documents`.
 - Retrieval at `POST /api/v1/retrieval/search`.
 - Chat at `POST /api/v1/chat` and `POST /api/v1/chat/stream`.
@@ -186,13 +187,14 @@ Primary API surfaces:
 
 ## n8n
 
-Workflow exports live under `workflows/n8n/` and are inactive, credential-free source artifacts. Validate them with:
+Workflow exports live under `workflows/n8n/` and are inactive, credential-free source artifacts. Import them automatically or validate them with:
 
 ```powershell
+make n8n-import
 make validate-n8n
 ```
 
-The n8n contract is documented in [n8n workflow contract](docs/n8n/workflows.md).
+Operational guidance lives in [n8n production runbook](docs/n8n/production-runbook.md) and [n8n workflow contract](docs/n8n/workflows.md).
 
 ## Prometheus and Grafana
 

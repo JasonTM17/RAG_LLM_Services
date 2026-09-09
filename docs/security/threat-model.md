@@ -56,14 +56,15 @@ operator dashboards.
 
 ## Authentication Readiness
 
-v1 uses development owner resolution through `X-User-Id` only in non-production
-environments. This is intentional for local learning workflows and tests. It is
-not a production authentication system. Production mode rejects dev auth and
-requires an external auth boundary before release cutover.
+v1 development modes support developer owner resolution through `X-User-Id` for
+local workflow and testing ergonomics. In production mode, dev auth is disabled
+and fails closed.
 
-Future production auth must add server-side session/JWT validation, CSRF
-controls for browser mutations if cookie sessions are selected, authorization
-matrix tests, and security event logging for login and authorization failures.
+Phase 17 implements production account authentication:
+- Account registration via `POST /api/v1/auth/register` with argon2id password hashing.
+- Credential login via `POST /api/v1/auth/login` issuing signed stateless HS256 JWT access tokens.
+- `Authorization: Bearer <token>` validation enforced on all owner-scoped routes in production.
+- Rate-limiting enforced on registration and login endpoints to mitigate brute force.
 
 ## Required Release Gates
 

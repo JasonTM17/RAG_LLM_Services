@@ -34,12 +34,11 @@ not be treated as novel vulnerabilities:
   untrusted documents and treats retrieved text as untrusted context; this is
   a documented design boundary covered by prompt-injection tests. See
   [Threat model](docs/security/threat-model.md).
-- Owner scoping via the `X-User-Id` header. v1 development auth resolves the
+- Owner scoping via the `X-User-Id` header. Development auth resolves the
   owner from this header in non-production environments only; it fails closed
-  outside development/test, and production mode rejects dev auth entirely.
-  Real production authentication (session/JWT validation and an external auth
-  boundary) is a required release gate and is currently not implemented. See
-  the Authentication Readiness section of the
+  in production mode. Production authentication uses stateless JWT Bearer tokens
+  issued via `/api/v1/auth/register` and `/api/v1/auth/login`. See the
+  Authentication Readiness section of the
   [threat model](docs/security/threat-model.md).
 - Any weakness whose remediation is already tracked as pending release work
   in the [threat model](docs/security/threat-model.md) rather than a defect in

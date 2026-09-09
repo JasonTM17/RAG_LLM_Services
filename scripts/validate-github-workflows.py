@@ -50,6 +50,15 @@ WORKFLOW_MARKERS = {
         "uv run python scripts/sql-parameterization-scan.py",
         "uv run python scripts/dependency-scan.py",
     ),
+    "publish-containers.yml": (
+        "actions/checkout@v5",
+        "docker/setup-buildx-action@v3",
+        "docker/login-action@v3",
+        "docker/build-push-action@v6",
+        "secrets.DOCKERHUB_USERNAME",
+        "secrets.DOCKERHUB_TOKEN",
+        "ghcr.io",
+    ),
 }
 
 SECRET_SHAPED_RE = re.compile(

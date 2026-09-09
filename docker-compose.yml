@@ -90,6 +90,12 @@ services:
       EVAL_RUN_STALE_AFTER_SECONDS: ${EVAL_RUN_STALE_AFTER_SECONDS:-3600}
     ports:
       - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   web:
     build:
@@ -103,12 +109,18 @@ services:
     restart: unless-stopped
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
       RAG_BACKEND_ORIGIN: ${RAG_BACKEND_ORIGIN:-http://api:8000}
     ports:
       - "${WEB_PORT:-3001}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000', (r) => process.exit(r.statusCode < 400 ? 0 : 1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -267,6 +279,13 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - n8n_data:/home/node/.n8n
+      - ./workflows/n8n:/workflows:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
 
   prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v2.55.1}
@@ -277,7 +296,7 @@ services:
       redis:
         condition: service_healthy
       n8n:
-        condition: service_started
+        condition: service_healthy
       postgres-exporter:
         condition: service_started
       redis-exporter:

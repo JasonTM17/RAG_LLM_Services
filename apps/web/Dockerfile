@@ -16,13 +16,22 @@ RUN pnpm --filter @rag-llm-services/web build
 
 FROM node:24.12.0-bookworm-slim AS runner
 
+LABEL org.opencontainers.image.title="rag-llm-services-web"
+LABEL org.opencontainers.image.description="Next.js Web UI for RAG LLM Services"
+LABEL org.opencontainers.image.source="https://github.com/JasonTM17/RAG_LLM_Services"
+LABEL org.opencontainers.image.licenses="MIT"
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 
-COPY --from=build /app/apps/web/.next/standalone ./
-COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=build /app/apps/web/public ./apps/web/public
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
 
+COPY --from=build --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
+
+USER nextjs
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]

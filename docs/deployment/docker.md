@@ -38,6 +38,21 @@ Application images are defined by:
 
 Build them with `make container-build` or through `.github/workflows/container-build.yml`.
 
+### Docker Hub & Package Publishing
+
+For publishing images to Docker Hub (`docker.io`) and GitHub Container Registry (`ghcr.io`):
+
+1. **GitHub Actions Automation**:
+   - Workflow: `.github/workflows/publish-containers.yml`
+   - Trigger: Push tag `v*` (e.g. `v0.1.0`) or manual `workflow_dispatch` (allowing selective registry push and dry-runs).
+   - Requires repository secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (GHCR uses automatic `GITHUB_TOKEN`).
+   - Images tagged: `vX.Y.Z`, `latest`, and `sha-<commit>`.
+
+2. **Local Publishing**:
+   - `make dockerhub-build`: builds and tags images locally under the specified Docker Hub user.
+   - `make dockerhub-push`: builds, tags, and pushes all three images to Docker Hub.
+   - Script: `.\scripts\publish-docker-hub.ps1 -DockerHubUser <user> -Tag <tag> -Push` (supports `-DryRun`).
+
 The worker service receives the `EVAL_*` variables used by the Phase 12
 evaluation runner, including dataset path, report directory, top K, and
 thresholds. Evaluation tasks share the configured Celery/Redis queue with
@@ -99,7 +114,12 @@ health, retrieval, citation, metrics, n8n, Grafana, and acceptance checks.
 
 ## n8n
 
-`docker-compose.yml` includes an `n8n` service backed by the `n8n_data` volume. It is configured through `.env` substitution, enables `N8N_METRICS`, and receives only runtime environment variables, not exported credentials. Workflow JSON lives under `workflows/n8n/` and must pass `uv run python scripts/validate-n8n-workflows.py` before commit.
+`docker-compose.yml` includes an `n8n` service backed by the `n8n_data` volume and mounting `./workflows/n8n:/workflows:ro`. It is configured through `.env` substitution, enables `N8N_METRICS`, and receives only runtime environment variables, not exported credentials.
+
+Workflow JSON lives under `workflows/n8n/` and must pass `uv run python scripts/validate-n8n-workflows.py` before commit.
+
+- **Auto-import**: Run `make n8n-import` or `.\scripts\n8n-import-workflows.ps1` to import all 5 source-controlled workflows into the running container without manual UI clicking.
+- **Production Runbook**: See [n8n Production Runbook](../n8n/production-runbook.md) for detailed contracts, error linking, outbound webhook alerts, and production auth migration.
 
 ## Prometheus
 
