@@ -80,13 +80,13 @@ jobs:
           TAG="${INPUT_TAG:-$REF_TAG}"
           CLEAN_TAG="${TAG#v}"
           
-          # Convert repository name and dockerhub user to lowercase for valid OCI image naming
-          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          # Convert repository owner and dockerhub user to lowercase for valid OCI image naming
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           DOCKERHUB_USER_LOWER=$(echo "${{ secrets.DOCKERHUB_USERNAME }}" | tr '[:upper:]' '[:lower:]')
           
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "clean_tag=${CLEAN_TAG}" >> "$GITHUB_OUTPUT"
-          echo "repo_lower=${REPO_LOWER}" >> "$GITHUB_OUTPUT"
+          echo "owner_lower=${OWNER_LOWER}" >> "$GITHUB_OUTPUT"
           echo "dockerhub_user=${DOCKERHUB_USER_LOWER}" >> "$GITHUB_OUTPUT"
           
           SHOULD_PUSH="${{ github.event_name == 'push' || inputs.push }}"
@@ -101,9 +101,9 @@ jobs:
           tags: |
             ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-api:{1}', steps.meta-calc.outputs.dockerhub_user, steps.meta-calc.outputs.tag) || '' }}
             ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-api:latest', steps.meta-calc.outputs.dockerhub_user) || '' }}
-            ghcr.io/${{ steps.meta-calc.outputs.repo_lower }}/api:${{ steps.meta-calc.outputs.tag }}
-            ghcr.io/${{ steps.meta-calc.outputs.repo_lower }}/api:latest
-            ghcr.io/${{ steps.meta-calc.outputs.repo_lower }}/api:sha-${{ github.sha }}
+            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-api:${{ steps.meta-calc.outputs.tag }}
+            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-api:latest
+            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-api:sha-${{ github.sha }}
 
       - name: Build and push Worker image
         uses: docker/build-push-action@v6
@@ -114,9 +114,9 @@ jobs:
           tags: |
             ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-worker:{1}', steps.meta-calc.outputs.dockerhub_user, steps.meta-calc.outputs.tag) || '' }}
             ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-worker:latest', steps.meta-calc.outputs.dockerhub_user) || '' }}
-            ghcr.io/${{ steps.meta-calc.outputs.repo_lower }}/worker:${{ steps.meta-calc.outputs.tag }}
-            ghcr.io/${{ steps.meta-calc.outputs.repo_lower }}/worker:latest
-            ghcr.io/${{ steps.meta-calc.outputs.repo_lower }}/worker:sha-${{ github.sha }}
+            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-worker:${{ steps.meta-calc.outputs.tag }}
+            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-worker:latest
+            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-worker:sha-${{ github.sha }}
 
       - name: Build and push Web image
         uses: docker/build-push-action@v6
@@ -127,6 +127,6 @@ jobs:
           tags: |
             ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-web:{1}', steps.meta-calc.outputs.dockerhub_user, steps.meta-calc.outputs.tag) || '' }}
             ${{ steps.dockerhub-check.outputs.available == 'true' && format('{0}/rag-llm-services-web:latest', steps.meta-calc.outputs.dockerhub_user) || '' }}
-            ghcr.io/${{ steps.meta-calc.outputs.repo_lower }}/web:${{ steps.meta-calc.outputs.tag }}
-            ghcr.io/${{ steps.meta-calc.outputs.repo_lower }}/web:latest
-            ghcr.io/${{ steps.meta-calc.outputs.repo_lower }}/web:sha-${{ github.sha }}
+            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-web:${{ steps.meta-calc.outputs.tag }}
+            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-web:latest
+            ghcr.io/${{ steps.meta-calc.outputs.owner_lower }}/rag-llm-services-web:sha-${{ github.sha }}
